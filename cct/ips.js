@@ -1,0 +1,66 @@
+import { MyContract, get_unsolved_contracts, update_contract, just_describe } from "lib/cct.js"
+
+/** @param {NS} ns */
+export async function main(ns) {
+  const contracts = get_unsolved_contracts(ns, "Generate IP Addresses")
+  if (!contracts?.length) return
+  for (let c of contracts) { await solve(ns, c); update_contract(ns, c) }
+}
+
+/**
+ * @param {string} number Number to part
+ * @return {[string]} The possible 
+ */
+function partNumber(number, remainingParts) {
+  let possibleNextParts = []
+  // impossible
+  if (number.length > remainingParts * 3 || number.length < 1) {
+    return []
+  }
+  // single digits
+  if (remainingParts > 1 || number.length == 1) {
+    possibleNextParts.push(number.charAt(0))
+  }
+  if (number.charAt(0) !== '0' && number.length > 1) {
+    // two digits (if not starting with zero)
+    if (remainingParts > 1 || number.length == 2) {
+      possibleNextParts.push(number.slice(0, 2))
+    }
+    // three digits (if not greater than 255)
+    if (number.length > 2) {
+      let threeDigits = number.slice(0, 3)
+      if (parseInt(threeDigits) < 256 && (remainingParts > 1 || number.length == 3)) {
+        possibleNextParts.push(threeDigits)
+      }
+    }
+  }
+
+  // now we have all possibilities for the next
+  if (remainingParts == 1) {
+    return possibleNextParts
+  } else {
+    let parts = []
+    possibleNextParts.forEach(p1 => {
+      let remainingNumber = number.slice(p1.length)
+      let possibleRemainders = partNumber(remainingNumber, remainingParts - 1)
+      possibleRemainders.forEach(r => {
+        parts.push(`${p1}.${r}`)
+      })
+    })
+    return parts
+  }
+}
+
+/**
+ * @param {NS} ns
+ * @param {MyContract} contract
+ */
+async function solve(ns, contract) {
+  // just_describe(ns, contract)
+
+  /** @type {[number, number][]} */
+  const number = contract.data
+  const possibilities = partNumber(number, 4)
+
+  contract.setSolution(JSON.stringify(possibilities))
+}
