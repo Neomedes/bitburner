@@ -11,6 +11,52 @@ async function player_must_focus(ns: NS) {
     return must_focus
 }
 
+interface WorkUntilTargetConfig {
+    target_value: number,
+    get_current_value: () => number,
+    on_start: (() => boolean) | undefined,
+}
+
+async function work_until_target(ns: NS, config: WorkUntilTargetConfig): Promise<boolean> {
+    const first_wait_threshold = 3_600 // 1h
+    const second_wait_threshold = 5 // 5s
+    const malus_for_gain_increase = 0.95 // wait only 95% of the time after the first_wait_threshold
+
+    let began_training = false
+    let current_value = config.get_current_value()
+    while (current_value < config.target_value) {
+        if (!began_training && config.on_start !== undefined) {
+            const on_start_successful = config.on_start()
+            if (!on_start_successful) {
+                return false
+            }
+            began_training = true
+        }
+        const previous_reputation = current_value
+        await ns.sleep(10000)
+        current_value = config.get_current_value()
+
+        if (current_value >= config.target_value) {
+            break;
+        }
+        const gain_in_10s = current_value - previous_reputation
+        const diff2target = config.target_value - current_value
+        const seconds2wait = diff2target / gain_in_10s * 10
+
+        if (seconds2wait > first_wait_threshold) {
+            // when waiting longer than an hour, try to take the gain increase during this time into account
+            await ns.sleep((first_wait_threshold + (seconds2wait - first_wait_threshold) * malus_for_gain_increase) * 1000)
+        } else if (seconds2wait > second_wait_threshold) {
+            // when waiting less than an hour but more than 5 seconds until reaching the target just wait that long
+            await ns.sleep(seconds2wait * 1000)
+        }
+        // when waiting less than 5 seconds the 10 second gain calculation gets us over the threshold.
+
+        current_value = config.get_current_value()
+    }
+    return true
+}
+
 /**
  * Determines which job should and may be worked on next. If there are no jobs or the current job is
  * already the best one available, `undefined` will be returned.
@@ -94,7 +140,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     const final_target_reputation = 400_000
-    const must_focus = player_must_focus(ns)
+    const must_focus = await player_must_focus(ns)
 
     let work_needed = true
     let current_job: MyJob | null = null
@@ -115,19 +161,17 @@ export async function main(ns: NS): Promise<void> {
             ns.exit()
         }
 
-        if (!ns.singularity.applyToCompany(company_name, next_job.info.field)) {
-            error_t(ns, "%s: Bewerbung für Job '%s' wurde von %s unerwartet abgelehnt!", ns.getScriptName(), next_job.info.name, company_name)
-            ns.exit()
-        }
+        ns.singularity.applyToCompany(company_name, next_job.info.field)
 
         current_job = next_job
-        ns.singularity.workForCompany(company_name)
 
         if (OPTS.ladder === true) {
-            ns.tprintf("%s: Karriereleiter für %s:", ns.getScriptName(), company_name)
+            ns.tprintf("%s:", ns.getScriptName())
+            ns.tprintf(" ")
+            ns.tprintf("Karriereleiter für %s:", company_name)
             all_jobs.forEach(job => {
-                const prefix = job.info.name === current_job.info.name ? "-> " : "   "
-                ns.tprintf("%s%-24s (%s)", prefix, job.to_string({ omit_company: true, omit_field: true }))
+                const prefix = job.info.name === current_job!.info.name ? "-> " : "   "
+                ns.tprintf("%s%-24s", prefix, job.to_string({ omit_company: true, omit_field: true }))
             })
         }
 
@@ -139,8 +183,40 @@ export async function main(ns: NS): Promise<void> {
         const target_skills = (target_job == null ? current_job : target_job).info.requiredSkills
 
         // 1. Try to reach enough reputation
-        while(current_reputation < target_reputation) {
+        const reputation_work_config: WorkUntilTargetConfig = {
+            target_value: target_reputation,
+            get_current_value: () => ns.singularity.getCompanyRep(company_name),
+            on_start: () => ns.singularity.workForCompany(company_name, must_focus)
+        }
+        let work_successful = await work_until_target(ns, reputation_work_config)
+        if (!work_successful) {
+            error_t(ns, "%s: Abbruch: Konnte nicht für %s arbeiten.", ns.getScriptName(), company_name)
+            return
+        }
 
+        // 2. Train charisma
+        const charisma_work_config: WorkUntilTargetConfig = {
+            target_value: target_skills.charisma,
+            get_current_value: () => ns.getPlayer().skills.charisma,
+            on_start: () => {
+                if (ns.getPlayer().city !== ns.enums.CityName.Sector12) {
+                    const travelled = ns.singularity.travelToCity(ns.enums.CityName.Sector12)
+                    if (!travelled) {
+                        error_t(ns, "%s: Abbruch: Konnte nicht nach Sektor 12 fliegen.", ns.getScriptName())
+                        return false
+                    }
+                }
+                const studying = ns.singularity.universityCourse("Rothman University", ns.enums.UniversityClassType.management)
+                if (!studying) {
+                    error_t(ns, "%s: Abbruch: Konnte kein Management an der Rothman studieren.", ns.getScriptName())
+                    return false
+                }
+                return true
+            }
+        }
+        work_successful = await work_until_target(ns, charisma_work_config)
+        if (!work_successful) {
+            return
         }
     }
 

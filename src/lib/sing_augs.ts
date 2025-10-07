@@ -70,15 +70,15 @@ export class MyAugment {
   }
 
   static unique_aug_ssh_1m(): UniqueAugmentInfo {
-    return { name: "CashRoot Starter Kit", faction: "Sector 12", info: "Starting money 1m, programs: BruteSSH" }
+    return { name: "CashRoot Starter Kit", faction: "Sector-12", info: "Starting money 1m, programs: BruteSSH" }
   }
 
   static unique_aug_no_focus(): UniqueAugmentInfo {
-    return { name: "Neuroreceptor Manager", faction: "TianDiHui", info: "No penalty for not focussing" }
+    return { name: "Neuroreceptor Management Implant", faction: "Tian Di Hui", info: "No penalty for not focussing" }
   }
 
   static unique_aug_ftp_smtp(): UniqueAugmentInfo {
-    return { name: "Neurolink", faction: "BitRunners", info: "programs: ftpCrack, relaySMTP" }
+    return { name: "BitRunners Neurolink", faction: "BitRunners", info: "programs: ftpCrack, relaySMTP" }
   }
 
   static unique_aug_world_deamon(): UniqueAugmentInfo {
