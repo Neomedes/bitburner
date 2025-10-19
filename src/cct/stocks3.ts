@@ -29,7 +29,7 @@ async function solve(ns: NS, contract: MyContract) {
     order.bestProfit = order.profit + bestRemainingOrder.profit
   })
 
-  const bestOrder = possibleOrders.reduce((o1, o2) => o1 === undefined || o2.bestProfit > o1.bestProfit ? o2 : o1)
+  const bestOrder = possibleOrders.reduce((o1, o2) => o1 === undefined || o2.bestProfit > o1.bestProfit ? o2 : o1, { bestProfit: 0 })
 
   contract.setSolution(bestOrder.bestProfit ?? 0)
 }
