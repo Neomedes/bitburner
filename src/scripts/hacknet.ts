@@ -1,5 +1,6 @@
 import { disableLogs } from "lib/functions"
-import { log, log_t } from "lib/log"
+import { log, log_t, success_t } from "lib/log"
+import { get_updated_player } from "/util/update_data"
 
 /** @param {NS} ns
  * @param {int} ms Milliseconds to wait.
@@ -11,9 +12,14 @@ async function skippableWait(ns: NS, ms: number, skip: boolean = false) {
   }
 }
 
-/** @param {NS} ns */
-function tryPurchase(ns: NS): boolean {
-  return ns.hacknet.purchaseNode() > -1
+function tryPurchase(ns: NS, all_nodes: HacknetNode[]): boolean {
+  const new_node_index = ns.hacknet.purchaseNode()
+  if (new_node_index > -1) {
+    log(ns, "Purchased node")
+    all_nodes.push(new HacknetNode(ns, new_node_index))
+    return true
+  }
+  return false
 }
 
 interface Upgrade {
@@ -130,9 +136,9 @@ class HacknetNode {
 
   /**
    * Retrieves the cheapest upgrade for this node.
-   * @return {Upgrade | null} An array about the cheapest upgrade for this node.
+   * @return An array about the cheapest upgrade for this node.
    */
-  getCheapestUpgrade(): Upgrade | null {
+  getCheapestUpgrade(): Upgrade | undefined {
     let cpuCost = this.getCpuUpgradeCost()
     let ramCost = this.getRamUpgradeCost()
     let lvlCost = this.getLevelUpgradeCost()
@@ -143,7 +149,7 @@ class HacknetNode {
     } else if (isFinite(lvlCost)) {
       return { node_index: this.index, upgrade_type: "lvl", cost: lvlCost, do_upgrade: () => this.upgradeLevel() }
     }
-    return null
+    return undefined
   }
 
 }
@@ -156,8 +162,7 @@ export async function main(ns: NS) {
     ['burn', false], // burn through money and exit
     ['money', 10], // percentage of money available for purchasing when not burning
   ])
-
-  // TODO get player
+  OPTS.money = OPTS.burn === true ? 100 : Math.min(Math.max(0, OPTS.money as number), 100)
 
   async function seconds(sec: number) {
     await skippableWait(ns, sec * 1000, OPTS.burn === true)
@@ -166,54 +171,56 @@ export async function main(ns: NS) {
     await seconds(min * 60)
   }
 
-  const NODES = []
+
+  const NODES: HacknetNode[] = []
   let currentNodeCount = ns.hacknet.numNodes()
   for (let i = 0; i < currentNodeCount; i++) {
     NODES.push(new HacknetNode(ns, i))
   }
   const MAX_NODES = ns.hacknet.maxNumNodes()
 
-  let bought = true
+  let player = await get_updated_player(ns)
+  let last_iterations_money = player.money * (100 - OPTS.money) / 100
   for (; ;) {
-    // always try to purchase a new node
-    if (tryPurchase(ns)) {
-      log(ns, "Purchased node")
-      NODES.push(new HacknetNode(ns, currentNodeCount))
-      currentNodeCount++
-      bought = true
-    } else {
-      let bestInvest = NODES
-        .map(n => n.getCheapestUpgrade())
-        .reduce((cheapestOverallUpgrade, cheapestNodeUpgrade) => {
-          if (cheapestOverallUpgrade == null) return cheapestNodeUpgrade
-          if (cheapestNodeUpgrade == null) return cheapestOverallUpgrade
-          if (cheapestNodeUpgrade.cost < cheapestOverallUpgrade.cost) return cheapestNodeUpgrade
-          return cheapestOverallUpgrade
-        })
-      if (bestInvest != null) {
-        // upgrade if enough money is available
-        let playerMoney = ns.getPlayer().money
-        if (playerMoney >= bestInvest.cost) {
-          bestInvest.do_upgrade()
-          bought = true
-        } else {
-          if (bought)
-            log(ns, "Waiting for funds to upgrade %s for node %d (cost: %s, player has %s)", bestInvest.upgrade_type, bestInvest.node_index, ns.formatNumber(bestInvest.cost), ns.formatNumber(playerMoney))
-          bought = false
-        }
-      } else if (currentNodeCount >= MAX_NODES) {
-        // end loop, because there is nothing more to do.
-        log_t(ns, "nothing left to purchase")
-        log_t(ns, "ending...")
-        bought = false
+    const upgrades = NODES.map(n => n.getCheapestUpgrade()).filter(upg => upg !== undefined)
+    if (currentNodeCount < MAX_NODES) {
+      upgrades.push({
+        node_index: currentNodeCount,
+        upgrade_type: "buy",
+        cost: ns.hacknet.getPurchaseNodeCost(),
+        do_upgrade: () => {
+          if (tryPurchase(ns, NODES)) currentNodeCount++
+        },
+      })
+    }
+    let cheapestUpgrade = upgrades.reduce((cheapestOverallUpgrade, cheapestNodeUpgrade) => {
+      if (cheapestOverallUpgrade === undefined) return cheapestNodeUpgrade
+      if (cheapestNodeUpgrade === undefined) return cheapestOverallUpgrade
+      if (cheapestNodeUpgrade.cost < cheapestOverallUpgrade.cost) return cheapestNodeUpgrade
+      return cheapestOverallUpgrade
+    })
+    if (cheapestUpgrade === undefined) {
+      // there is no cheapest upgrade
+      success_t(ns, "%s: Es gibt nichts mehr zu updaten. Skript wird beendet.", ns.getScriptName())
+      break
+    }
+    // upgrade when enough money is available
+    let printed_wait_msg = false
+    for (; ;) {
+      player = await get_updated_player(ns)
+      const money_available = player.money - last_iterations_money
+      if (money_available >= cheapestUpgrade.cost) {
+        cheapestUpgrade.do_upgrade()
+        // end waiting for funds
         break
       } else {
-        if (bought)
-          log(ns, "Nothing to upgrade, waiting for next node to purchase...")
-        bought = false
-        await minutes(5)
+        if (!printed_wait_msg) {
+          log(ns, "Warte auf Geld (Node: %d, Upg: %s, Preis: %s, Spieler-Base: %s)", cheapestUpgrade.node_index, cheapestUpgrade.upgrade_type, ns.formatNumber(cheapestUpgrade.cost), ns.formatNumber(last_iterations_money))
+          printed_wait_msg = true
+        }
+        await seconds(30)
       }
     }
-    await seconds(10)
+    last_iterations_money = player.money - cheapestUpgrade.cost
   }
 }
