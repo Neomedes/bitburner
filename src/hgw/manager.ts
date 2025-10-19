@@ -99,7 +99,7 @@ async function hgw_action(ns: NS, attack_host: string, action: ACTION, target_se
   }
   const exec_options = { preventDuplicates: true, threads: thread_count }
   const pid = ns.exec(action.script, attack_host, exec_options, target_server.host)
-  await ns.sleep(wait);
+  await ns.sleep(Math.min(wait, 30_000));
   const is_done = () => !ns.isRunning(pid);
   while (!is_done()) {
     await ns.sleep(1000);
@@ -135,13 +135,13 @@ function isPrepped(ns: NS, host: string): boolean {
 async function prepServer(ns: NS, attack_host: string, target_server: MyServer) {
   ns.printf("Prepping target")
   for (; ;) {
-    if (!hasMinSecurity(ns, target_server.host)) {
+    const min_sec = hasMinSecurity(ns, target_server.host)
+    const max_mon = hasMaxMoney(ns, target_server.host)
+    if (!min_sec) {
       await hgw_action(ns, attack_host, ACTION.WEAKEN, target_server)
-    }
-    if (!hasMaxMoney(ns, target_server.host)) {
+    } else if (!max_mon) {
       await hgw_action(ns, attack_host, ACTION.GROW, target_server)
-    }
-    if (isPrepped(ns, target_server.host)) {
+    } else {
       return
     }
     await ns.sleep(0)
@@ -189,10 +189,18 @@ interface BatchPartInfo {
   time: number,
 }
 
+function add(...summands: BatchPartInfo[]): BatchPartInfo {
+  const sum: BatchPartInfo = { thread: 0, time: 0, ram: 0, }
+  summands.forEach(i => {
+    sum.thread += i.thread
+    sum.ram += i.ram
+    sum.time = Math.max(sum.time, i.time)
+  })
+  return sum
+}
+
 interface BatchParams {
-  total_threads: number,
-  total_time: number,
-  total_ram: number,
+  totals: BatchPartInfo,
   h: BatchPartInfo,
   w1: BatchPartInfo,
   g: BatchPartInfo,
@@ -232,67 +240,64 @@ function calculate_batch_params(ns: NS, attack_server: MyServer, target_server: 
   const available_ram = free_ram(ns, attack_server.host)
   for (const pc of percent) {
     const max_threads = Math.ceil(pc / 100 / ns.formulas.hacking.hackPercent(target_ns_server, player))
+    if (max_threads < 1) continue
 
-    const hThreads = max_threads
-    const hTime = ns.formulas.hacking.hackTime(target_ns_server, player)
-    const hRam = calculate_required_ram(ACTION.HACK.script, hThreads)
+    const hack_info: BatchPartInfo = {
+      thread: max_threads,
+      time: ns.formulas.hacking.hackTime(target_ns_server, player),
+      ram: calculate_required_ram(ACTION.HACK.script, max_threads),
+    }
 
+    // reset some properties of mocked server: assume prepped (as of starting time) but hacked (as of money missing) server
     const money_fraction = ns.formulas.hacking.hackPercent(target_ns_server, player)
-    const money_hacked = hThreads * money_fraction * (target_ns_server.moneyMax ?? 0)
+    const money_hacked = max_threads * money_fraction * (target_ns_server.moneyMax ?? 0)
     target_ns_server.moneyAvailable = (target_ns_server.moneyMax ?? 0) - money_hacked
+    target_ns_server.hackDifficulty = (target_ns_server.minDifficulty ?? 0)
 
     // The number of grow threads required, the grow time, and the effect of
     // growing.
-    const gThreads = ns.formulas.hacking.growThreads(target_ns_server, player, target_ns_server.moneyMax ?? 0, attack_server.cores ?? 1)
-    const gTime = ns.formulas.hacking.growTime(target_ns_server, player)//ns.getGrowTime(target_server)
-    const gRam = calculate_required_ram(ACTION.GROW.script, gThreads)
+    const grow_info: BatchPartInfo = {
+      thread: ns.formulas.hacking.growThreads(target_ns_server, player, target_ns_server.moneyMax ?? 0, attack_server.cores ?? 1),
+      time: ns.formulas.hacking.growTime(target_ns_server, player), //ns.getGrowTime(target_server)
+      ram: 0
+    }
+    if (grow_info.thread < 1) continue
+    grow_info.ram = calculate_required_ram(ACTION.GROW.script, grow_info.thread)
 
     // The number of weaken threads required and the weaken time.
-    const hack_sec_increase = ns.hackAnalyzeSecurity(hThreads, target_server.host)
-    const grow_sec_increase = ns.growthAnalyzeSecurity(gThreads, target_server.host)
+    const wRam = calculate_required_ram(ACTION.WEAKEN.script, 1)
+    const wTime = ns.formulas.hacking.weakenTime(target_ns_server, player)
+    const hack_sec_increase = ns.hackAnalyzeSecurity(hack_info.thread, target_server.host)
+    const weaken_info_post_hack: BatchPartInfo = {
+      thread: calculate_weaken_threads(hack_sec_increase),
+      time: wTime,
+      ram: 0,
+    }
+    if (weaken_info_post_hack.thread < 1) continue
+    weaken_info_post_hack.ram = wRam * weaken_info_post_hack.thread
 
-    const wRam = calculate_required_ram(ACTION.HACK.script, 1)
-    const w1Threads = calculate_weaken_threads(hack_sec_increase)
-    target_ns_server.hackDifficulty = (target_ns_server.minDifficulty ?? 0) + hack_sec_increase
-    const w1Time = ns.formulas.hacking.weakenTime(target_ns_server, player)
-    const w1Ram = wRam * w1Threads
+    const grow_sec_increase = ns.growthAnalyzeSecurity(grow_info.thread, target_server.host)
+    const weaken_info_post_grow: BatchPartInfo = {
+      thread: calculate_weaken_threads(grow_sec_increase),
+      time: wTime,
+      ram: 0,
+    }
+    if (weaken_info_post_grow.thread < 1) continue
+    weaken_info_post_grow.ram = wRam * weaken_info_post_grow.thread
 
-    const w2Threads = calculate_weaken_threads(grow_sec_increase)
-    target_ns_server.hackDifficulty = (target_ns_server.minDifficulty ?? 0) + grow_sec_increase
-    const w2Time = ns.formulas.hacking.weakenTime(target_ns_server, player)
-    const w2Ram = wRam * w2Threads
-
-    if (hThreads < 1 || w1Threads < 1 || gThreads < 1 || w2Threads < 1) {
+    if (hack_info.thread < 1 || weaken_info_post_hack.thread < 1 || grow_info.thread < 1 || weaken_info_post_grow.thread < 1) {
       continue
     }
 
     const param: BatchParams = {
-      total_threads: hThreads + w1Threads + gThreads + w2Threads,
-      total_time: Math.max(hTime, w1Time, gTime, w2Time),
-      total_ram: hRam + w1Ram + gRam + w2Ram,
-      h: {
-        ram: hRam,
-        thread: hThreads,
-        time: hTime,
-      },
-      w1: {
-        ram: w1Ram,
-        thread: w1Threads,
-        time: w1Time,
-      },
-      g: {
-        ram: gRam,
-        thread: gThreads,
-        time: gTime,
-      },
-      w2: {
-        ram: w2Ram,
-        thread: w2Threads,
-        time: w2Time,
-      },
+      totals: add(hack_info, weaken_info_post_hack, grow_info, weaken_info_post_grow),
+      h: hack_info,
+      w1: weaken_info_post_hack,
+      g: grow_info,
+      w2: weaken_info_post_grow,
     }
 
-    if (param.total_ram <= available_ram) {
+    if (param.totals.ram <= available_ram) {
       return param
     }
   }

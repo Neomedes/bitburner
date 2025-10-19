@@ -59,31 +59,3 @@ export class ACTION {
     return ns.formulas.hacking.weakenTime(mock_server(ns, target), ns.getPlayer())
   }
 }
-
-/** @param {NS} ns */
-function countPortOpeners(ns: NS) {
-  let count = 0
-  if (ns.fileExists("/BruteSSH.exe")) ++count
-  if (ns.fileExists("/FTPCrack.exe")) ++count
-  if (ns.fileExists("/HTTPWorm.exe")) ++count
-  if (ns.fileExists("/SQLInject.exe")) ++count
-  if (ns.fileExists("/relaySMTP.exe")) ++count
-  return count
-}
-
-/** @param {NS} ns */
-function chooseTargetHost(ns: NS): "n00dles" | "joesguns" | "phantasy" {
-  const n00dles = "n00dles", joesguns = "joesguns", phantasy = "phantasy"
-  const portOpenerCount = countPortOpeners(ns)
-  ns.printf("Found %d port openers", portOpenerCount)
-  if (portOpenerCount < 2) {
-    return n00dles
-  }
-  const playerHackLevel = ns.getPlayer().skills.hacking
-  const hackLevel4Phantasy = ns.getServerRequiredHackingLevel(phantasy)
-  if (portOpenerCount >= 5 && playerHackLevel > hackLevel4Phantasy * 2) {
-    return phantasy
-  }
-
-  return joesguns
-}
