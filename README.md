@@ -1,17 +1,6 @@
 ## TODO
 
-### Jobs
-
-1. Finish `util/sing_job.ts` for the following functionality:
-   - Search for best available job and apply if necessary
-   - Dynamic determination, which reputation amount to target
-   - Start working in job
-   - Apply for promotion if needs are met
-   - Intersect with studying for charisma
-2. Start script for studying
-   - Determine (auto or manual), which field to study (hack/charisma)
-   - Determine (auto or manual) at what expense (free to expensive)
-   - Determine (auto, manual or never) when to stop
+1. Use Player.jobs to reduce risk of errors in `sing_job.js`
 
 ### PAL - Purchase Augmentations List
 
@@ -19,26 +8,42 @@ The script `util/sing_augs_pal.ts` is there to provide all functionality for get
 
 These are:
 
-- ✅ Find best augments
+- ✅ Find best augments of all factions
 - ✅ Find best factions
-- ➡ List missing requirements to join factions
-- Find currently available PAL (for money, reputation)
-- Consider pre-requisite augmentations in the buying order
+- ✅ List missing requirements to join a factions
+- ✅ Find currently available PAL (for money, reputation)
+- ✅ Consider pre-requisite augmentations in the buying order
 - Find next level PAL (how much money and/or reputation is needed until the next best augmentations are available)
 
 ### More Cheap Data
 
-1. Player data: Periodically update the player data
+1. ✅ Basic Player data
+   1. Periodically update the player data
+   1. Money sources (`ns.getMoneySources()`)
+   1. Strategy data (what to do, settings for all scripts)
+1. ✅ Faction data
+1. Company data
 
-### Enhance Autostart
+### Enhance Autoplay
 
-1. Study Computer Science at Rothman University
-1. Do criminal activities in the slums
+1. Start: Study Computer Science at Rothman University
+1. Then do criminal activities in the slums
 1. Start hacknet
 1. Travel around the world to get Faction invitations
 1. Work for specific companies to get their Faction's invitation
 1. Consider different node phases:
    1. You have nothing => Start by 
+
+The autoplay should be generally enhanced using a purpose system.
+There is always one goal: Defeat the world deamon. Therefore two things are needed:
+
+1. The red pill
+1. a huge hacking skill
+
+To get the red pill
+There the strategy splits, depending on the current situation of the player.
+It is always neccessary to determine the currently best available route.
+There is always a time x until the 
 
 ## Current concepts
 
@@ -47,6 +52,7 @@ This is the current folder strategy:
 ```js
 autostart.js  // Run after every Node start and Augment installation
 cct/          // Solving contracts
+ds/           // data scripts - fetching and updating data
 hgw/          // Hacking servers for money and experience
 lib/          // Common functionality
 scripts/      // Direct use by player
