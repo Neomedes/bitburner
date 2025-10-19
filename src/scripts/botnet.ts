@@ -1,9 +1,10 @@
-import { exec_script, is_empty_str, OutputTable } from "lib/functions"
+import { ScriptArg } from "@ns"
+import { exec_script, is_empty_str } from "lib/functions"
+import { get_keep_ram, read_keep_ram_file } from "lib/keep_ram"
 import { error_t, warning_t } from "lib/log"
 import { MyServer } from "lib/servers"
 import { get_updated_server_list } from "util/update_data"
-import { read_keep_ram_file, get_keep_ram } from "lib/keep_ram"
-import { ScriptArg } from "@ns"
+import { OutputTable, OutputTableColumnType } from "/lib/tables"
 
 /**
  * Retrieves all servers with a matching hostname.
@@ -90,16 +91,23 @@ function connect_server(ns: NS, search_term: string, servers: MyServer[], silent
  * @param {string[]} search_term Search term to match hosts.
  * @param {MyServer[]} servers All servers available.
  * @param {boolean} silent No output when no servers are found.
+ * @param open_all Open backdoors on all matching hosts
  */
-async function open_backdoor(ns: NS, search_term: string, servers: MyServer[], silent: boolean) {
+async function open_backdoor(ns: NS, search_term: string, servers: MyServer[], silent: boolean, open_all: boolean) {
   const matching_servers = get_matching_servers(search_term, servers)
   if (matching_servers.length === 1) {
     const params = [matching_servers[0].host]
     if (silent) params.push('--silent')
     await exec_script(ns, "util/sing_backdoor.js", "home", 1, ...params)
+  } else if (matching_servers.length > 1 && open_all) {
+    const params = silent ? ['--silent'] : []
+    for (const server of matching_servers) {
+      await exec_script(ns, "util/sing_backdoor.js", "home", 1, ...[server.host, ...params])
+    }
   } else if (!silent) {
     if (matching_servers.length > 1) {
-      warning_t(ns, "%s: Der Hostname '%s' konnte nicht eindeutig einem Server zugeordnet werden. (%d Treffer)", ns.getScriptName(), search_term, matching_servers.length)
+      warning_t(ns, "%s: Der Hostname '%s' konnte nicht eindeutig einem Server zugeordnet werden. %d Treffer:", ns.getScriptName(), search_term, matching_servers.length)
+      matching_servers.forEach(s => ns.tprintf("%20s", s.host))
     } else {
       warning_t(ns, "%s: Der Hostname '%s' konnte keinem Server zugeordnet werden.", ns.getScriptName(), search_term)
     }
@@ -111,15 +119,16 @@ async function open_backdoor(ns: NS, search_term: string, servers: MyServer[], s
  * @param {string[]} search_term Search term to match hosts.
  * @param {MyServer[]} servers All servers available.
  * @param {boolean} silent No output when no servers are found.
+ * @param open_all Open backdoors on all matching hosts
  */
-async function open_backdoors(ns: NS, search_terms: string[], servers: MyServer[], silent: boolean) {
+async function open_backdoors(ns: NS, search_terms: string[], servers: MyServer[], silent: boolean, open_all: boolean) {
   const use_standard_hosts = search_terms.length <= 0
   const host_terms = use_standard_hosts ? ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z"] : search_terms
   if (use_standard_hosts && !silent) {
     ns.tprintf("%s: Öffne Backdoors auf Standard-Faction-Servern: %s", ns.getScriptName(), host_terms.join())
   }
   for (let search_term of host_terms) {
-    await open_backdoor(ns, search_term, servers, silent)
+    await open_backdoor(ns, search_term, servers, silent, open_all)
   }
 }
 
@@ -153,14 +162,14 @@ function print_server_tree(ns: NS, server: MyServer, all_servers: MyServer[], pa
 function print_server_stats(ns: NS, servers: MyServer[], show_all: boolean, specific_hosts: string[]) {
   const ot = new OutputTable(ns,
     [
-      [20], // name
-      [5, OutputTable.DATA_TYPES.INTEGER], // hack needed
-      [10, OutputTable.DATA_TYPES.CURRENCY], // max money
-      [10, OutputTable.DATA_TYPES.INTEGER], // min. security
-      [10, OutputTable.DATA_TYPES.RAM], // RAM
-      [10, OutputTable.DATA_TYPES.BOOLEAN], // nuked?
-      [10, OutputTable.DATA_TYPES.BOOLEAN], // backdoored?
-      [10, OutputTable.DATA_TYPES.PERCENTAGE], // score
+      { title: "Name", property: "host", width: 20, type: OutputTableColumnType.String },
+      { title: "Hack", property: "hack_needed", width: 5, type: OutputTableColumnType.Integer },
+      { title: "max $", property: "max_money", width: 10, type: OutputTableColumnType.Currency },
+      { title: "min Sec", property: "min_security", width: 10, type: OutputTableColumnType.Integer },
+      { title: "RAM", property: "max_ram", width: 10, type: OutputTableColumnType.Ram },
+      { title: "Offen", property: "nuked", width: 10, type: OutputTableColumnType.Boolean },
+      { title: "Backdoor", property: "backdoor", width: 10, type: OutputTableColumnType.Boolean },
+      { title: "Score", property: "score", width: 10, type: OutputTableColumnType.Percentage },
     ],
     { outer_lines: true },
   )
@@ -197,13 +206,12 @@ function print_server_stats(ns: NS, servers: MyServer[], show_all: boolean, spec
     })
   }
 
-  ot.separator()
-  ot.headline("Name", "Hack", "max. Money", "min. Sec.", "RAM", "Geöffnet?", "Backdoor?", "Score")
   for (let i = 0; i < output_servers.length; i++) {
     let s = output_servers[i]
-    ot.line(s.host, s.hack_needed, s.max_money, s.min_security, s.max_ram, s.nuked, s.backdoor, s.score <= 0 ? 0 : s.score / max_score)
+    ot.line({ ...s, score: s.score <= 0 ? 0 : s.score / max_score })
   }
-  ot.separator()
+
+  ot.flush()
 }
 
 /**
@@ -311,9 +319,10 @@ export async function main(ns: NS) {
     ns.tprintf("%-24s - %s", "[--find|-f] HOST", "Infos ausgeben für einen bestimmte Node.")
     ns.tprintf("%-24s - %s", "[--connect|-c] HOST", "Mit genanntem Server verbinden.")
     ns.tprintf(" ")
-    ns.tprintf("%-24s", "--backdoor [-h HOST [-h HOST2...]]")
+    ns.tprintf("%-24s", "--backdoor [-h HOST [-h HOST2...]] [--all]")
     ns.tprintf("%-24s   %s", " ", "Installiert backdoors. Mittels -h können Hosts angegeben werden, auf denen es versucht werden soll.")
     ns.tprintf("%-24s   %s", " ", "Sind keine Hosts angegeben, werden die Standard-Faction-Servern genutzt.")
+    ns.tprintf("%-24s   %s", " ", "Mittels --all kann, wenn eine Host-Bezeichnung uneindeutig ist, auf allen eine Backdoor installiert werden.")
     ns.tprintf(" ")
     ns.tprintf("%-24s", "--clear [-h HOST [-h HOST2 [...]]] [-n HOST [-n HOST2 [...]]]")
     ns.tprintf("%-24s   %s", " ", "Entfernt alle Skripte, die aktuell auf den Hosts laufen.")
@@ -347,7 +356,7 @@ export async function main(ns: NS) {
   } else if (!is_empty_str(OPTS.connect as string)) {
     connect_server(ns, OPTS.connect as string, servers, OPTS.silent === true)
   } else if (OPTS.backdoor === true) {
-    await open_backdoors(ns, OPTS.h as string[], servers, OPTS.silent === true)
+    await open_backdoors(ns, OPTS.h as string[], servers, OPTS.silent === true, OPTS.all === true)
   } else if (!is_empty_str(OPTS.run as string)) {
     run_script_on_servers(ns, servers, OPTS.run as string, OPTS.h as string[], OPTS["_"] as string[], OPTS.silent === true)
   } else if (OPTS.clear === true) {

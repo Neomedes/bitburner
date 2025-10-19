@@ -199,6 +199,26 @@ export function union<T>(ar1: T[], ar2: T[]) {
   return [...ar1, ...ar2].filter(f_unique)
 }
 
+export function minus<T>(minuend: T[], subtrahend: T[]): T[] {
+  return minuend.filter(e1 => !subtrahend.includes(e1))
+}
+
+export function reduce_to_min(min: number, val: number): number {
+  return (min > val) ? val : min
+}
+
+export function reduce_to_max(max: number, val: number): number {
+  return (max < val) ? val : max
+}
+
+export function reduce_to_sum(sum: number, val: number): number {
+  return sum + val
+}
+
+export function reduce_to_product(sum: number, val: number): number {
+  return sum * val
+}
+
 export function add_bit(bits: string): string {
   let result = bits.split("")
   for (let pos = result.length - 1; pos >= 0; pos--) {
@@ -241,118 +261,4 @@ export function combinations<T>(arr: T[], n: number): T[][] {
   }
 
   return result
-}
-
-export class OutputTable {
-  _ns: NS
-  _column_value_to_string: (column_index: number, value: any) => string
-  _line_template: string
-  _separator_line: string
-  _lines_per_block: number
-  _line: number
-
-  /** Data types for constructing the table (used in formatting the data per line) */
-  static DATA_TYPES = {
-    /** Data type for strings. */
-    STRING: "str",
-    /** Data type for numbers. */
-    NUMBER: "num",
-    /** Data type for percentages. */
-    PERCENTAGE: "pct",
-    /** Data type for RAM numbers. */
-    RAM: "ram",
-    /** Data type for integers (no formatting). */
-    INTEGER: "int",
-    /** Data type for currency numbers. */
-    CURRENCY: "cur",
-    /** Data type for booleans. */
-    BOOLEAN: "bool",
-  }
-
-  /**
-   * Creates a new table definition for outputting to console
-   * @param {NS} ns NetScript API.
-   * @param {[number, string?, boolean?][]} columns
-   * Column definitions
-   * 
-   * Index 0: Length (0 or less for as wide as needed, but might destroy layout)
-   * Index 1: (Optional) Type of column for corresponding automatic conversion to string.
-   *          If no type is given the standard conversion to string is used.
-   * Index 2: (Optional) Possible left alignment.
-   * @param {number} lines_per_block After how many lines should a separator be drawn. 0 or less means no separator lines. Default: 3.
-   * @param {boolean} outer_lines Should outer lines be drawn? Default: False.
-   * @param {string[]} boolean_translate Translations for boolean values. First for true, second for false. Default: ["Ja", "Nein"]
-   */
-  constructor(ns: NS, columns: [number, string?, boolean?][], { lines_per_block = 3, outer_lines = false, boolean_translate = ["Ja", "Nein"] } = {}) {
-    this._ns = ns
-
-    this._column_value_to_string = (column_index: number, value: any) => OutputTable.transform_value(columns[column_index][1] ?? OutputTable.DATA_TYPES.STRING, ns, value, boolean_translate)
-    this._line_template = columns.map(c => `%${(c[2] ?? false) === (c[0] > 0) ? '-' : ''}${c[0] > 0 ? c[0] : 40}s`).join(" | ")
-    this._separator_line = columns.map(c => "-".repeat(c[0] > 0 ? c[0] : 40)).join("-+-")
-    if (outer_lines) {
-      this._line_template = `| ${this._line_template} |`
-      this._separator_line = `+-${this._separator_line}-+`
-    }
-    this._lines_per_block = lines_per_block ?? 0
-
-    this._line = 0
-  }
-
-  reset() {
-    this._line = 0
-  }
-
-  separator() {
-    this._ns.tprintf(this._separator_line)
-  }
-
-  headline(...values: string[]) {
-    this._ns.tprintf(this._line_template, ...values)
-    this.separator()
-  }
-
-  /**
-   * Prints a new line with the given values.
-   * @param {any[]} values 
-   */
-  line(...values: any[]) {
-    const col_values = values.map((v, i) => typeof (v) === "string" ? v : this._column_value_to_string(i, v))
-    if (this._lines_per_block > 0 && this._line > 0 && this._line % this._lines_per_block === 0) {
-      this.separator()
-    }
-    this._ns.tprintf(this._line_template, ...col_values)
-    this._line += 1
-  }
-
-  /** @param {NS} ns NetScript API. @param {number} value The value to format. @return {string} The formatted value. */
-  static tv_num(ns: NS, value: number) { return ns.formatNumber(value) }
-  /** @param {NS} ns NetScript API. @param {number} value The value to format. @return {string} The formatted value. */
-  static tv_pct(ns: NS, value: number) { return value === 0 ? "-" : ns.formatPercent(value) }
-  /** @param {NS} ns NetScript API. @param {number} value The value to format. @return {string} The formatted value. */
-  static tv_ram(ns: NS, value: number) { return ns.formatRam(value) }
-  /** @param {NS} ns NetScript API. @param {number} value The value to format. @return {string} The formatted value. */
-  static tv_int(ns: NS, value: number) { return `${value}` }
-  /** @param {NS} ns NetScript API. @param {number} value The value to format. @return {string} The formatted value. */
-  static tv_cur(ns: NS, value: number) { return `$${ns.formatNumber(value)}` }
-  /** @param {NS} ns NetScript API. @param {boolean} value The value to format. @return {string} The formatted value. */
-  static tv_bool(ns: NS, value: boolean, boolean_translate: string[]) { return boolean_translate[value === true ? 0 : 1] }
-  /** @param {string} type Type of value. @param {NS} ns NetScript API. @param {any} value The value to format. @return {string} The formatted value. */
-  static transform_value(type: string, ns: NS, value: any, boolean_translate: string[]) {
-    switch (type) {
-      case OutputTable.DATA_TYPES.NUMBER:
-        return OutputTable.tv_num(ns, value)
-      case OutputTable.DATA_TYPES.PERCENTAGE:
-        return OutputTable.tv_pct(ns, value)
-      case OutputTable.DATA_TYPES.RAM:
-        return OutputTable.tv_ram(ns, value)
-      case OutputTable.DATA_TYPES.INTEGER:
-        return OutputTable.tv_int(ns, value)
-      case OutputTable.DATA_TYPES.CURRENCY:
-        return OutputTable.tv_cur(ns, value)
-      case OutputTable.DATA_TYPES.BOOLEAN:
-        return OutputTable.tv_bool(ns, value, boolean_translate)
-      default:
-        return String(value)
-    }
-  }
 }

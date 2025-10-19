@@ -1,6 +1,7 @@
-import { formatTime, OutputTable } from "lib/functions"
+import { formatTime } from "lib/functions"
 import { warning_t, COLOR } from "lib/log"
 import { update_server_list } from "/util/update_data"
+import { OutputTable, OutputTableColumnType } from "/lib/tables"
 
 const AUTOMATIC_BUY_INTERVAL = 60000 // every minute
 const HOSTNAME_PREFIX = "psrv"
@@ -220,14 +221,6 @@ class ServerLevelOverviewItem {
  * @param {number} save_money How much money should not be used for purchasing.
  */
 function print_overview(ns: NS, available_servers: number, overview_items: ServerLevelOverviewItem[], save_money: number) {
-  const ot = new OutputTable(ns, [
-    [3, OutputTable.DATA_TYPES.INTEGER],
-    [10, OutputTable.DATA_TYPES.RAM],
-    [10, OutputTable.DATA_TYPES.CURRENCY],
-    [10, OutputTable.DATA_TYPES.BOOLEAN],
-    [16, OutputTable.DATA_TYPES.STRING],
-    [10, OutputTable.DATA_TYPES.BOOLEAN],
-  ])
 
   if (available_servers > 0) {
     ns.tprintf("%d Server können noch gekauft werden.", available_servers)
@@ -235,26 +228,46 @@ function print_overview(ns: NS, available_servers: number, overview_items: Serve
     ns.tprintf("Es können keine Server mehr gekauft werden.")
   }
 
-  ot.separator()
-  ot.headline("Lv", "RAM", "Preis", "Verfügbar", "In Besitz", "Upgrade?")
-  ot.separator()
+  const ot = new OutputTable(ns,
+    [
+      { title: "Lv", property: "lv", width: 3, type: OutputTableColumnType.Integer },
+      { title: "RAM", property: "ram", width: 10, type: OutputTableColumnType.Ram },
+      { title: "Preis", property: "cost", width: 10, type: OutputTableColumnType.Currency },
+      { title: "Verfügbar", property: "can_buy", width: 10, type: OutputTableColumnType.Integer },
+      { title: "In Besitz", property: "host", width: 16, type: OutputTableColumnType.String },
+      { title: "Upgrade?", property: "upgradable", width: 10, type: OutputTableColumnType.String },
+    ]
+  )
 
   const usable_money = ns.getPlayer().money - save_money
   for (let idx in overview_items) {
     const item = overview_items[idx]
     const can_buy = Math.min(available_servers, Math.floor(usable_money / item.cost))
+    const values = {
+      lv: item.level.lv,
+      ram: item.level.ram,
+      cost: item.cost,
+      can_buy: can_buy,
+      host: "",
+      upgradable: "",
+    }
     if (item.owned_servers.length === 0) {
-      ot.line(item.level.lv, item.level.ram, item.cost, can_buy, "-", "")
+      ot.line(values)
     } else {
       const first_server = item.owned_servers[0]
+      values.host = first_server.host
       const has_next_level = !first_server.current_level.is_max()
       const upgrade_cost = has_next_level ? first_server.get_cost(ns, first_server.current_level.next_level()) : 0
       const upgradable = has_next_level ? (upgrade_cost <= usable_money ? "Ja" : ns.formatNumber(upgrade_cost)) : "-"
-      ot.line(item.level.lv, item.level.ram, item.cost, can_buy, first_server.host, upgradable)
-      item.owned_servers.slice(1).forEach(os => ot.line("", "", "", "", os.host, "", true))
+      values.upgradable = upgradable
+      ot.line(values)
+      item.owned_servers.slice(1).forEach(os => {
+        ot.line({ host: os.host }, false)
+      })
     }
   }
-  ot.separator()
+
+  ot.flush()
 }
 
 /**
@@ -292,13 +305,13 @@ function get_overview(ns: NS, owned_servers: OwnedServer[] | undefined = undefin
 
 /**
  * Purchase servers for real. No more security checks. Writes a protocol to the terminal and a toast.
- * @param {NS} ns Netscript API.
- * @param {number} count How many servers should be purchased.
- * @param {number} ram How much RAM should each server have.
- * @param {number} start_index At what index should the naming begin.
- * @return {string[]} The hostnames of the bought servers
+ * @param ns Netscript API.
+ * @param count How many servers should be purchased.
+ * @param ram How much RAM should each server have.
+ * @param start_index At what index should the naming begin.
+ * @return The hostnames of the bought servers
  */
-function buy_servers(ns: NS, count: number, ram: number, start_index: number): string[] {
+async function buy_servers(ns: NS, count: number, ram: number, start_index: number): Promise<string[]> {
   const hostnames: string[] = []
   for (let i = 0; i < count; i++) {
     const name = `${HOSTNAME_PREFIX}${String(start_index + i).padStart(3, "0")}`
@@ -316,12 +329,12 @@ function buy_servers(ns: NS, count: number, ram: number, start_index: number): s
       ns.tprintf("Neue Server:")
       hostnames.forEach(host => ns.tprintf("  %s", host))
     }
-    update_server_list(ns)
+    await update_server_list(ns)
   }
   return hostnames
 }
 
-function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer[], maxed_servers: number, total_server_limit: number, save_money: number, initial_server_size: number = 2): boolean {
+async function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer[], maxed_servers: number, total_server_limit: number, save_money: number, initial_server_size: number = 2): Promise<boolean> {
   const owned_server_count = owned_servers.length
   // buy servers if possible and neccessary
   if (owned_server_count < total_server_limit) {
@@ -338,7 +351,7 @@ function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer[], ma
       const base_server_cost = ns.getPurchasedServerCost(initial_server_size)
       const max_affordable = Math.min(buy_servers_count, Math.floor(player_money / base_server_cost))
       // if buying servers, buy smallest type possible and upgrade later
-      const bought_servers = buy_servers(ns, max_affordable, initial_server_size, owned_server_count)
+      const bought_servers = await buy_servers(ns, max_affordable, initial_server_size, owned_server_count)
       if (bought_servers.length > 0) {
         owned_servers.push(...bought_servers.map(host => OwnedServer.build(ns, host)))
       }
@@ -362,7 +375,7 @@ function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer[], ma
 async function max_out_server(ns: NS, batch_size: number, owned_servers: OwnedServer[], server_limit: number, save_money: number, options = { verbose: false }): Promise<void> {
   const maxed_servers = owned_servers.filter(os => os.current_level.is_max()).length
   const current_batch_size = batch_size - (maxed_servers % batch_size)
-  if (!fill_batch(ns, current_batch_size, owned_servers, maxed_servers, server_limit, save_money)) {
+  if (!(await fill_batch(ns, current_batch_size, owned_servers, maxed_servers, server_limit, save_money))) {
     // couldn't fill batch -> no more actions available
     if (options.verbose) {
       warning_t(ns, "Konnte nicht genug neue Server kaufen.")
@@ -494,7 +507,7 @@ export async function main(ns: NS) {
 
   if (OPTS.buy > 0) {
     done_sth = true
-    const [new_host] = buy_servers(ns, 1, ServerLevel.by_level(OPTS.buy).ram, owned_servers.length)
+    const [new_host] = await buy_servers(ns, 1, ServerLevel.by_level(OPTS.buy).ram, owned_servers.length)
     owned_servers.push(OwnedServer.build(ns, new_host))
   }
   if (OPTS.max > 0) {

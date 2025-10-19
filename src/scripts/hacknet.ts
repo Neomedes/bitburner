@@ -148,17 +148,19 @@ class HacknetNode {
 
 }
 
-
-
 /** @param {NS} ns */
 export async function main(ns: NS) {
   disableLogs(ns, "sleep")
 
-  const options = ns.flags([
-    ['b', false], // burn through money and exit
+  const OPTS = ns.flags([
+    ['burn', false], // burn through money and exit
+    ['money', 10], // percentage of money available for purchasing when not burning
   ])
+
+  // TODO get player
+
   async function seconds(sec: number) {
-    await skippableWait(ns, sec * 1000, options.b === true)
+    await skippableWait(ns, sec * 1000, OPTS.burn === true)
   }
   async function minutes(min: number) {
     await seconds(min * 60)
@@ -170,14 +172,6 @@ export async function main(ns: NS) {
     NODES.push(new HacknetNode(ns, i))
   }
   const MAX_NODES = ns.hacknet.maxNumNodes()
-  // always try to start with 3 nodes
-  while (currentNodeCount < 3) {
-    if (tryPurchase(ns)) {
-      NODES.push(new HacknetNode(ns, currentNodeCount))
-      currentNodeCount++
-    }
-    await seconds(10)
-  }
 
   let bought = true
   for (; ;) {

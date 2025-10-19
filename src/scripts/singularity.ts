@@ -128,8 +128,8 @@ export async function main(ns: NS) {
     const filter_augs = (a: MyAugment): boolean =>
       share_entries(a.factions, possible_factions) // ... of these factions
       && !a.owned // ... that we do not own yet
-      && (ignore_money || (a.price ?? 0) <= player_money) // ... that we can afford on their own
-      && (ignore_reputation || (a.req_reputation ?? 0) <= get_max_reputation(a.factions)) // ... that we have enough reputation for
+      && (ignore_money || a.price <= player_money) // ... that we can afford on their own
+      && (ignore_reputation || a.req_reputation <= get_max_reputation(a.factions)) // ... that we have enough reputation for
 
     const augmentations = all_augments.filter(filter_augs)
 
@@ -140,7 +140,7 @@ export async function main(ns: NS) {
 
     /** Determine the total price of all given augments in best order (most expensive to cheapest) */
     function total_price(augs: MyAugment[]): number {
-      return augs.map(a => a.price ?? 0)
+      return augs.map(a => a.price)
         .sort()
         .reverse()
         .reduce((s, p, i) => s + ((purchase_cost_multiplier ** i) * p), 0)
@@ -150,7 +150,7 @@ export async function main(ns: NS) {
     // then add as much augments as we can afford
 
     // sort by best score per price in descending order
-    function rel_score(a: MyAugment): number { return ((a.score ?? 0) / (a.price ?? 1)) }
+    function rel_score(a: MyAugment): number { return (a.score / (a.price === 0 ? 1 : a.price)) }
     augmentations.sort((a, b) => rel_score(b) - rel_score(a))
 
     // find break point, the index of the last augment where we can afford all previous augments
@@ -183,7 +183,7 @@ export async function main(ns: NS) {
       ns.tprintf("%02s-+-%10s-+-%60s-+-%10s-+-%10s-+-%s", "--", "-".repeat(10), "-".repeat(60), "-".repeat(10), "-".repeat(10), "-".repeat(30))
     }
 
-    pal.sort((a, b) => (b.price ?? 0) - (a.price ?? 0))
+    pal.sort((a, b) => b.price - a.price)
     if (pal.length < 1) {
       warning_t(ns, "Keine Möglichkeit des optimalen Kaufs gefunden!")
     } else {
@@ -193,11 +193,11 @@ export async function main(ns: NS) {
 
       let total = 0
       pal.forEach((p, i) => {
-        const real_price = (purchase_cost_multiplier ** i) * (p.price ?? 0)
+        const real_price = (purchase_cost_multiplier ** i) * p.price
         total += real_price
         const price = ns.formatNumber(real_price)
-        const rep = ns.formatNumber(p.req_reputation ?? 0)
-        const score = ns.formatNumber(p.score ?? 0)
+        const rep = ns.formatNumber(p.req_reputation)
+        const score = ns.formatNumber(p.score)
         const factions = p.factions.filter(f => possible_factions.includes(f)).join(", ")
         line((i + 1).toString(), price, p.name, rep, score, factions)
         if ((i + 1) % 3 === 0) separator()

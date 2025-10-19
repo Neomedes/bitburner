@@ -186,7 +186,10 @@ export async function main(ns: NS): Promise<void> {
         const reputation_work_config: WorkUntilTargetConfig = {
             target_value: target_reputation,
             get_current_value: () => ns.singularity.getCompanyRep(company_name),
-            on_start: () => ns.singularity.workForCompany(company_name, must_focus)
+            on_start: () => {
+                if (OPTS.ladder === true) ns.tprintf("Arbeite bis zu einer Reputation von %s", ns.formatNumber(target_reputation))
+                return ns.singularity.workForCompany(company_name, must_focus)
+            }
         }
         let work_successful = await work_until_target(ns, reputation_work_config)
         if (!work_successful) {
@@ -199,6 +202,7 @@ export async function main(ns: NS): Promise<void> {
             target_value: target_skills.charisma,
             get_current_value: () => ns.getPlayer().skills.charisma,
             on_start: () => {
+                if (OPTS.ladder === true) ns.tprintf("Lerne Management zum Erreichen von %d Charisma", target_skills.charisma)
                 if (ns.getPlayer().city !== ns.enums.CityName.Sector12) {
                     const travelled = ns.singularity.travelToCity(ns.enums.CityName.Sector12)
                     if (!travelled) {
