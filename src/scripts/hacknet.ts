@@ -209,13 +209,22 @@ export async function main(ns: NS) {
     for (; ;) {
       player = await get_updated_player(ns)
       const money_available = player.money - last_iterations_money
-      if (money_available >= cheapestUpgrade.cost) {
+      if (money_available < 0) {
+        // the money was drained by others means, so adjust accordingly
+        last_iterations_money = player.money
+      } else if (money_available >= cheapestUpgrade.cost) {
         cheapestUpgrade.do_upgrade()
         // end waiting for funds
         break
       } else {
         if (!printed_wait_msg) {
-          log(ns, "Warte auf Geld (Node: %d, Upg: %s, Preis: %s, Spieler-Base: %s)", cheapestUpgrade.node_index, cheapestUpgrade.upgrade_type, ns.formatNumber(cheapestUpgrade.cost), ns.formatNumber(last_iterations_money))
+          log(ns,
+            "Warte auf Geld (Node: %d, Upg: %s, Preis: %s, Baseline: %s)",
+            cheapestUpgrade.node_index,
+            cheapestUpgrade.upgrade_type,
+            ns.formatNumber(cheapestUpgrade.cost),
+            ns.formatNumber(last_iterations_money),
+          )
           printed_wait_msg = true
         }
         await seconds(30)
