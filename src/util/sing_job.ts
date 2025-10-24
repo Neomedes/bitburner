@@ -1,15 +1,7 @@
-import { NS, ScriptArg } from '@ns'
+import { NS } from '@ns'
 import { error_t } from '/lib/log'
-import { get_updated_augment_list, get_updated_job_list } from '/util/update_data'
 import { MyJob } from '/lib/sing_jobs'
-import { MyAugment } from '/lib/sing_augs'
-
-async function player_must_focus(ns: NS) {
-    const augments = await get_updated_augment_list(ns, true)
-    const focus_augment = augments.find(a => a.name === MyAugment.unique_aug_no_focus().name)
-    const must_focus = !(focus_augment?.owned ?? false)
-    return must_focus
-}
+import { get_updated_job_list, player_must_focus } from '/util/update_data'
 
 interface WorkUntilTargetConfig {
     target_value: number,

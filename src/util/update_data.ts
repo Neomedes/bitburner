@@ -30,6 +30,13 @@ export async function get_updated_augment_list(ns: NS, complete_update: boolean 
   return read_augments_file(ns)
 }
 
+export async function player_must_focus(ns: NS) {
+  const augments = await get_updated_augment_list(ns, true)
+  const focus_augment = augments.find(a => a.name === MyAugment.unique_aug_no_focus().name)
+  const must_focus = !(focus_augment?.owned ?? false)
+  return must_focus
+}
+
 export async function get_updated_job_list(ns: NS): Promise<MyJob[]> {
   disableLogs(ns, "exec")
   await exec_script(ns, "ds/sing_jobs_list.js", "home")
