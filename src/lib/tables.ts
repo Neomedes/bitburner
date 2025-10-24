@@ -219,7 +219,7 @@ export class OutputTable<T> {
             let line_count_for_block = 0
             lines.forEach(line => {
                 const block_ended_before = _table_config.lines_per_block > 0 && line_count_for_block > 0 && (line_count_for_block % _table_config.lines_per_block) === 0
-                if (block_ended_before) ns.tprintf(separator_line)
+                if (block_ended_before && line.counts) ns.tprintf(separator_line)
                 wrap_oversize_lines(line.content).forEach(subline => ns.tprintf(line_template, ...subline))
                 if (line.is_title) ns.tprintf(separator_line)
                 if (line.counts) line_count_for_block++
