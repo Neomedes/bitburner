@@ -174,7 +174,7 @@ function filter_with_verbose_total(ns: NS, fn: (a: MyAugment, i: number, ar: MyA
   }
 }
 
-async function print_next_augments(ns: NS, all_augments: MyAugment[], maximum_difficulty: number, verbose: boolean = true) {
+async function print_next_augments(ns: NS, all_augments: MyAugment[], maximum_difficulty: number, verbose: boolean = false) {
   const available_money = ns.getPlayer().money
   const available_factions = (await get_updated_faction_list(ns, true))
     .filter(f => get_faction_difficulty(ns, f) <= maximum_difficulty)
