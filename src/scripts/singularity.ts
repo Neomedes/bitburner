@@ -47,7 +47,6 @@ export async function main(ns: NS) {
   ])
   OPTS.help = OPTS.help || OPTS['?']
   OPTS.update = OPTS.update || OPTS.u
-  OPTS.backdoors = OPTS.backdoors || OPTS.b
 
   /**
    * @return {never}
