@@ -1,7 +1,7 @@
 import { CodingContractName } from "@ns"
 import { is_unresolved, read_cct_file } from "lib/cct"
 import { all_finished, f_unique, run_script } from "lib/functions"
-import { error_t, prepend_time } from "lib/log"
+import { error_t, log, prepend_time } from "lib/log"
 
 function get_solver_script(type: CodingContractName): string | undefined {
     switch (type) {
@@ -45,7 +45,7 @@ export async function main(ns: NS) {
         .filter(t => t !== undefined)
         .filter(f_unique)
 
-    if (types.length > 0) ns.toast(prepend_time(ns, ns.sprintf("Try solving %d types", types.length)))
+    if (types.length > 0) log(ns, "Try solving %d types", types.length)
 
     const scripts: [CodingContractName, string | undefined][] = types.map(t => [t, get_solver_script(t)])
     scripts.filter(([t, s]) => s === undefined).forEach(([t, s]) => error_t(ns, "Kein CCT-Solver-Skript bekannt für '%s'", t))
