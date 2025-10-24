@@ -96,11 +96,11 @@ export class MyPlayer {
      */
     static fromJSON(obj: any): MyPlayer {
         const s = new MyPlayer(obj.city, obj.location)
-        s.set_skills(obj.requirements)
-        s.set_money(obj.enemies)
-        s.set_bitnode(obj.favor)
-        s.set_jobs(obj.work_types)
-        s.set_source_files(obj.reputation)
+        s.set_skills(obj.skills)
+        s.set_money(obj.money)
+        s.set_bitnode(obj.bitnode)
+        s.set_jobs(obj.jobs)
+        s.set_source_files(obj.source_files)
         s.set_money_sources(obj.money_sources)
         return s
     }
@@ -123,6 +123,6 @@ export function write_player_file(ns: NS, player: MyPlayer) {
  */
 export function read_player_file(ns: NS): MyPlayer {
     const player_data = ns.read(PLAYER_FILE)
-    const player = JSON.parse(player_data).map((o: any) => MyPlayer.fromJSON(o))
+    const player = MyPlayer.fromJSON(JSON.parse(player_data))
     return player
 }
