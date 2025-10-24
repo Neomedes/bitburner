@@ -21,7 +21,7 @@ export async function main(ns: NS): Promise<void> {
     const wait_seconds: number = OPTS.s as number
 
     function print_help_and_exit() {
-        ns.tprintf("Skript zum Studieren Studieren")
+        ns.tprintf("Skript zum Studieren")
         ns.tprintf("Aufruf: %s [OPTIONEN] UNI Kurs", ns.getScriptName())
         ns.tprintf(" ")
         ns.tprintf("Folgende Optionen stehen zur Verfügung:")
