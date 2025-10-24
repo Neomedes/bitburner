@@ -462,7 +462,7 @@ export async function main(ns: NS) {
    * Prints the help and exits the script.
    * @return {never}
    */
-  function printHelpAndExit() {
+  function print_help_and_exit() {
     const line = "%-20s - %s"
     ns.tprintf("Programm zum Cluster-Management der privater Server, kurz %s.", HOSTNAME_PREFIX)
     ns.tprintf("Ohne Parameter werden die aktuell vorhandenen Server aufgelistet, sowie die ggf. verfügbaren RAM-Optionen für neue Server.")
@@ -498,7 +498,7 @@ export async function main(ns: NS) {
   OPTS.help = OPTS.help === true || OPTS["?"] === true
 
   if (OPTS.help) {
-    printHelpAndExit()
+    print_help_and_exit()
   }
 
   const SERVER_LIMIT = ns.getPurchasedServerLimit()
@@ -522,6 +522,6 @@ export async function main(ns: NS) {
   }
   if (!done_sth) {
     // if nothing else should be done
-    printHelpAndExit()
+    print_help_and_exit()
   }
 }

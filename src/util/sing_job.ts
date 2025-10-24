@@ -84,7 +84,7 @@ export async function main(ns: NS): Promise<void> {
     ])
     OPTS.help = OPTS.help || OPTS["?"]
 
-    function printHelpAndExit(): never {
+    function print_help_and_exit(): never {
         ns.tprintf(" ")
         ns.tprintf("Dieses Skript soll die Arbeit mit Jobs erleichtern.")
         ns.tprintf(" ")
@@ -100,10 +100,10 @@ export async function main(ns: NS): Promise<void> {
     const companies = OPTS["_"] as string[]
 
     if (OPTS.help === true) {
-        printHelpAndExit()
+        print_help_and_exit()
     } else if (companies.length < 1) {
         error_t(ns, "%s: Es wurde kein Unternehmen angegeben, bei dem gearbeitet werden soll.", ns.getScriptName())
-        printHelpAndExit()
+        print_help_and_exit()
     }
 
     const company_query = companies[0].toLowerCase()

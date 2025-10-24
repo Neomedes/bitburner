@@ -51,7 +51,7 @@ export async function main(ns: NS) {
   /**
    * @return {never}
    */
-  function printHelpAndExit(): never {
+  function print_help_and_exit(): never {
     ns.tprintf("Folgende Optionen hat das Skript %s:", ns.getScriptName())
     ns.tprintf(" ")
     ns.tprintf("Ausgabe von Factions und Augmentations:")
@@ -72,7 +72,7 @@ export async function main(ns: NS) {
     ns.exit()
   }
 
-  if (OPTS.help) printHelpAndExit()
+  if (OPTS.help) print_help_and_exit()
 
   const all_augments = await get_updated_augment_list(ns, OPTS.update === true || OPTS.pal === true)
 
@@ -209,6 +209,6 @@ export async function main(ns: NS) {
   }
 
   if (!done_something) {
-    printHelpAndExit()
+    print_help_and_exit()
   }
 }

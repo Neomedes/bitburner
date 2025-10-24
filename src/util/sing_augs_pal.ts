@@ -247,7 +247,7 @@ export async function main(ns: NS) {
   /**
    * @return {never}
    */
-  function printHelpAndExit() {
+  function print_help_and_exit() {
     ns.tprintf("Ausgabe von sinnvollen Augments und deren Factions für die nächste Installation.")
     ns.tprintf("Diese sind auch bekannt als PAL - der 'Purchase Augmentations List'")
     ns.tprintf(" ")
@@ -261,7 +261,7 @@ export async function main(ns: NS) {
     ns.exit()
   }
 
-  if (OPTS.help) printHelpAndExit()
+  if (OPTS.help) print_help_and_exit()
 
   const all_augments = await get_updated_augment_list(ns, true)
 
@@ -272,7 +272,7 @@ export async function main(ns: NS) {
   } else if (OPTS.next) {
     await print_next_augments(ns, all_augments, OPTS.diff as number)
   } else {
-    printHelpAndExit()
+    print_help_and_exit()
   }
 
 }

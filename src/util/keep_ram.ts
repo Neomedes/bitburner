@@ -15,7 +15,7 @@ export async function main(ns: NS) {
   const ram = parseInt(ramParam)
 
   /** @return {never} */
-  function printHelpAndExit(): never {
+  function print_help_and_exit(): never {
     ns.tprintf("Hilfe:")
     ns.tprintf(" ")
     ns.tprintf("Aufruf: %s [OPTIONEN] [HOST NUM]", ns.getScriptName())
@@ -30,7 +30,7 @@ export async function main(ns: NS) {
   }
 
   if (OPTS.help) {
-    printHelpAndExit()
+    print_help_and_exit()
   }
 
   let entries: KeepRamEntry[]
@@ -80,7 +80,7 @@ export async function main(ns: NS) {
       }
     }
   } else {
-    printHelpAndExit()
+    print_help_and_exit()
   }
 
   if (changed) {

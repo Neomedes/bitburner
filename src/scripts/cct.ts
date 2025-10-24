@@ -19,7 +19,7 @@ export async function main(ns: NS) {
   const TYPES = ns.codingcontract.getContractTypes()
 
   /** @return {never} */
-  function printHelpAndExit(): never {
+  function print_help_and_exit(): never {
     ns.tprintf("Skript zur Suche nach Contracts sowie deren Lösung.")
     ns.tprintf("Startet regulär in einer Dauerschleife und sucht alle %s nach neuen Contracts.", formatTime(WAIT_BETWEEN_SEARCHES))
     ns.tprintf(" ")
@@ -61,7 +61,7 @@ export async function main(ns: NS) {
   }
 
   if (OPTS['?'] === true || OPTS.help === true) {
-    printHelpAndExit()
+    print_help_and_exit()
   } else if (OPTS.o === true || OPTS.once === true) {
     await run_once(ns)
   } else if (OPTS.l === true || OPTS.list === true) {
