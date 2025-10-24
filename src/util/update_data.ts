@@ -1,21 +1,24 @@
 import { MyServer, read_server_file } from "lib/servers"
 import { MyAugment, read_augments_file } from "lib/sing_augs"
-import { exec_script } from "lib/functions"
+import { exec_script, disableLogs } from "lib/functions"
 import { MyJob, read_jobs_file } from "/lib/sing_jobs"
 import { MyFaction, read_faction_file } from "/lib/factions"
 import { MyPlayer, read_player_file } from "/lib/player"
 
 export async function update_server_list(ns: NS) {
+  disableLogs(ns, "exec")
   await exec_script(ns, "ds/servers_find.js", "home")
   await exec_script(ns, "ds/servers_analyze.js", "home")
 }
 
 export async function get_updated_server_list(ns: NS): Promise<MyServer[]> {
+  disableLogs(ns, "exec")
   await update_server_list(ns)
   return read_server_file(ns)
 }
 
 export async function get_updated_augment_list(ns: NS, complete_update: boolean = false): Promise<MyAugment[]> {
+  disableLogs(ns, "exec")
   if (complete_update) {
     await exec_script(ns, "ds/sing_augs_list.js", "home")
     await exec_script(ns, "ds/sing_augs_fetch_stats.js", "home")
@@ -28,11 +31,13 @@ export async function get_updated_augment_list(ns: NS, complete_update: boolean 
 }
 
 export async function get_updated_job_list(ns: NS): Promise<MyJob[]> {
+  disableLogs(ns, "exec")
   await exec_script(ns, "ds/sing_jobs_list.js", "home")
   return read_jobs_file(ns)
 }
 
 export async function get_updated_faction_list(ns: NS, complete_update: boolean = false): Promise<MyFaction[]> {
+  disableLogs(ns, "exec")
   if (complete_update) {
     await exec_script(ns, "ds/factions_list.js", "home")
     await exec_script(ns, "ds/factions_fetch_enemies.js", "home")
@@ -46,6 +51,7 @@ export async function get_updated_faction_list(ns: NS, complete_update: boolean 
 }
 
 export async function get_updated_player(ns: NS): Promise<MyPlayer> {
+  disableLogs(ns, "exec")
   await exec_script(ns, "ds/player_init.js", "home")
   await exec_script(ns, "ds/player_fetch_money_sources.js", "home")
   await exec_script(ns, "ds/player_fetch_source_files.js", "home")
