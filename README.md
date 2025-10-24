@@ -26,15 +26,27 @@ These are:
 
 ### Enhance Autoplay
 
-1. Start: Study Computer Science at Rothman University
-1. Then do criminal activities in the slums
+1. Start: Study Computer Science at Rothman University at least for 1 minute or when a hacking skill of 50 is reached
+1. Then do criminal activities in the slums:
+   1. Shoplift until mugging is at 100%
+   1. Mug until Homicide is at 100%
+   1. Homicide until something else is needed (like studying/working for factions/companies)
 1. Start hacknet
-1. Travel around the world to get Faction invitations
-1. Work for specific companies to get their Faction's invitation
-1. Consider different node phases:
-   1. You have nothing => Start by 
+1. Hacking servers:
+   1. First hack n00dles -> joesguns -> phantasy
+   1. First, use the whole botnet
+   1. When home gets better (CPU x RAM > Botnet RAM), switch to fill home with one script instead of using the botnet
+   1. Additionally: When enough hacking skill is acquired, open backdoors on all servers
+1. Determine which factions to join and what to do to get an invitation
+   1. Travel around the world
+   1. Work for companies
+1. Determine how much reputation is needed for the best augments of this faction and how to get there
+   1. Work for the faction (in the best job available)
+   1. Eyeball whether it is faster to
+      - directly get to the max reputation
+      - by first getting to 150 favor (487491 reputation) and then restart
 
-The autoplay should be generally enhanced using a purpose system.
+The autoplay should be generally enhanced using a purpose/primary task system.
 There is always one goal: Defeat the world deamon. Therefore two things are needed:
 
 1. The red pill
