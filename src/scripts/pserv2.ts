@@ -1,226 +1,65 @@
-import { formatTime } from "lib/functions"
-import { warning_t, COLOR } from "lib/log"
-import { update_server_list } from "/util/update_data"
+import { formatTime, is_empty_str } from "lib/functions"
+import { COLOR, warning_t } from "lib/log"
+import { MyPurchasedServer, RamLevel } from "/lib/pserv"
 import { OutputTable, OutputTableColumnType } from "/lib/tables"
+import { get_updated_player, get_updated_pserv_list, update_server_list } from "/util/update_data"
 
 const AUTOMATIC_BUY_INTERVAL = 60000 // every minute
 const HOSTNAME_PREFIX = "psrv"
 
-class ServerLevel {
+class RamLevelOverviewItem {
   lv: number
   ram: number
-
-  static MAX_LV = 20 // default
-  /** @type {ServerLevel[]} */
-  static LEVELS: ServerLevel[] = [] // already defined levels
-
-  /**
-   * @param {number} lv The level
-   */
-  constructor(lv: number) {
-    this.lv = lv
-    this.ram = 2 ** lv
-  }
-
-  greater_than(other: ServerLevel): boolean {
-    return other == null || (this.lv > other.lv)
-  }
-
-  /**
-   * @return {boolean} Is this the max level
-   */
-  is_max(): boolean {
-    return this.lv >= ServerLevel.MAX_LV
-  }
-
-  /**
-   * @return {ServerLevel} The next level
-   */
-  next_level(): ServerLevel {
-    if (this.is_max()) {
-      throw new Error("Level kann nicht übers Maximum hinaus erhöht werden.")
-    }
-    return ServerLevel.get_level(this.lv + 1)
-  }
-
-  toString(): string {
-    return "Lv" + String(this.lv).padStart(2, "0")
-  }
-
-  /**
-   * @param {number} lv The desired level.
-   * @return {ServerLevel}
-   */
-  static get_level(lv: number): ServerLevel {
-    const defined = ServerLevel.LEVELS.find(level => level.lv === lv)
-    if (defined !== undefined) {
-      return defined
-    }
-    const new_level = new ServerLevel(lv)
-    ServerLevel.LEVELS.push(new_level)
-    return new_level
-  }
-
-  static by_level(lv: number): ServerLevel {
-    return ServerLevel.get_level(lv)
-  }
-
-  static by_ram(ram: number): ServerLevel {
-    return ServerLevel.get_level(ServerLevel.ram2lv(ram))
-  }
-
-  /**
-   * Calculates the server level by its RAM.
-   * @param {number} ram The RAM to calculate the level for.
-   * @return {number} The corresponding server level.
-   */
-  static ram2lv(ram: number): number {
-    let lv = 1
-    while (2 ** lv < ram) {
-      lv++
-    }
-    return lv
-  }
-
-  /**
-   * Gets the maximum server level
-   * @param {NS} ns Netscript API
-   * @return {number} The maximum server level.
-   */
-  static get_max_lv(ns: NS): number {
-    ServerLevel.MAX_LV = ServerLevel.ram2lv(ns.getPurchasedServerMaxRam())
-    return ServerLevel.MAX_LV
-  }
-
-  static BASE_LEVEL(): ServerLevel {
-    return ServerLevel.get_level(1)
-  }
-
-}
-
-class OwnedServer {
-  host: string
-  current_level: ServerLevel
-  /**
-   * @param {string} host
-   * @param {ServerLevel} current_level
-   */
-  constructor(host: string, current_level: ServerLevel) {
-    this.host = host
-    this.current_level = current_level
-  }
-
-  /**
-   * @param {NS} ns
-   * @param {ServerLevel} level
-   */
-  get_cost(ns: NS, level: ServerLevel) {
-    if (!level.greater_than(this.current_level)) {
-      //ns.tprintf("get_cost(%s): %s <= %s so cost is 0", this.host, level.toString(), this.current_level.toString())
-      return 0
-    }
-    const cost = ns.getPurchasedServerUpgradeCost(this.host, level.ram)
-    //ns.tprintf("get_cost(%s): from %s to %s = %s", this.host, this.current_level.toString(), level.toString(), ns.formatNumber(cost))
-    return cost
-  }
-
-  compare_to(other: OwnedServer): number {
-    return OwnedServer.compare(this, other)
-  }
-
-  /**
-   * Tries to upgrade the server to a given level.
-   * @param ns Netscript API.
-   * @param to_level ServerLevel to upgrade to.
-   * @returns Whether upgrading was successful or not.
-   */
-  upgrade(ns: NS, to_level: ServerLevel): boolean {
-    ns.tprintf("Upgrade %s to %s RAM", this.host, ns.formatRam(to_level.ram))
-    if (ns.upgradePurchasedServer(this.host, to_level.ram)) {
-      this.current_level = to_level
-      return true
-    }
-    return false
-  }
-
-  /**
-   * Registers a server.
-   * @param ns Netscript API.
-   * @param host Hostname of new server.
-   * @returns An instance representing the server.
-   */
-  static build(ns: NS, host: string): OwnedServer {
-    const server = ns.getServer(host)
-    const current_level = ServerLevel.by_ram(server.maxRam)
-    return new OwnedServer(host, current_level)
-  }
-
-  /**
-   * Compares two owned servers.
-   * @param {OwnedServer} a
-   * @param {OwnedServer} b
-   * @param {{order_by: ("lv"|"host")[], ascending: {"lv": boolean, "host": boolean}}} options
-   */
-  static compare(a: OwnedServer, b: OwnedServer, options = { order_by: ["lv", "host"], ascending: { "lv": true, "host": true } }): number {
-    if (a === b) {
-      return 0
-    }
-    if (a == null) {
-      return -1
-    }
-    if (b == null) {
-      return 1
-    }
-    for (let i = 0; i < options.order_by.length; i++) {
-      const order_field = options.order_by[i]
-      let order_value: number = 0
-      let sorting: boolean = true
-      switch (order_field) {
-        case "lv":
-          order_value = a.current_level.lv - b.current_level.lv
-          sorting = options.ascending.lv
-          break;
-        case "host":
-          order_value = a.host.localeCompare(b.host)
-          sorting = options.ascending.host
-          break;
-      }
-      if (sorting === false) {
-        order_value *= -1
-      }
-      if (order_value !== 0) {
-        return order_value
-      }
-    }
-    return 0
-  }
-}
-
-class ServerLevelOverviewItem {
-  level: ServerLevel
   cost: number
-  owned_servers: OwnedServer[]
+  upgrade_cost: number
+  can_buy: number
+  host: string
+  additional_hosts: string[]
+  upgradable: string
 
-  /**
-   * @param {ServerLevel} level
-   * @param {number} cost
-   * @param {OwnedServer[]} owned_servers
-   */
-  constructor(level: ServerLevel, cost: number, owned_servers: OwnedServer[]) {
-    this.level = level
-    this.cost = cost
-    this.owned_servers = owned_servers.filter(os => os.current_level.lv === this.level.lv)
+  constructor(level: RamLevel) {
+    this.lv = level.lv
+    this.ram = level.ram
+    this.cost = level.cost
+    this.upgrade_cost = level.is_max() ? -1 : level.next_level().cost - level.cost
+    this.can_buy = 0
+    this.host = ""
+    this.additional_hosts = []
+    this.upgradable = ""
+  }
+
+  fill_hosts(p_servers: MyPurchasedServer[]): RamLevelOverviewItem {
+    const pserv_at_level = p_servers.filter(os => os.current_level.lv === this.lv)
+    if (pserv_at_level.length > 0) {
+      this.host = p_servers[0].host
+      this.additional_hosts = p_servers.slice(1).map(s => s.host)
+    }
+    return this
+  }
+
+  determine_can_buy(money: number, max_left_for_purchase: number): RamLevelOverviewItem {
+    this.can_buy = Math.min(max_left_for_purchase, Math.floor(money / this.cost))
+    return this
+  }
+
+  determine_upgradable(ns: NS, money: number): RamLevelOverviewItem {
+    if (!is_empty_str(this.host)) {
+      let money_left = money - this.upgrade_cost
+      this.upgradable = this.upgrade_cost > -1 ? (money >= this.upgrade_cost ? "Ja" : ns.formatNumber(this.upgrade_cost)) : "-"
+
+    }
+    return this
   }
 }
 
 /**
  * Lists RAM options if additional servers can be bought
- * @param {NS} ns Netscript API.
- * @param {number} available_servers How many servers may still be bought.
- * @param {ServerLevelOverviewItem[]} overview_items The overview items to display.
- * @param {number} save_money How much money should not be used for purchasing.
+ * @param ns Netscript API.
+ * @param available_servers How many servers may still be bought.
+ * @param p_servers The purchased servers already owned.
+ * @param save_money How much money should not be used for purchasing.
  */
-function print_overview(ns: NS, available_servers: number, overview_items: ServerLevelOverviewItem[], save_money: number) {
+async function print_overview(ns: NS, available_servers: number, p_servers: MyPurchasedServer[], save_money: number) {
 
   if (available_servers > 0) {
     ns.tprintf("%d Server können noch gekauft werden.", available_servers)
@@ -228,7 +67,7 @@ function print_overview(ns: NS, available_servers: number, overview_items: Serve
     ns.tprintf("Es können keine Server mehr gekauft werden.")
   }
 
-  const ot = new OutputTable(ns,
+  const ot = new OutputTable<RamLevelOverviewItem>(ns,
     [
       { title: "Lv", property: "lv", width: 3, type: OutputTableColumnType.Integer },
       { title: "RAM", property: "ram", width: 10, type: OutputTableColumnType.Ram },
@@ -239,32 +78,22 @@ function print_overview(ns: NS, available_servers: number, overview_items: Serve
     ]
   )
 
-  const usable_money = ns.getPlayer().money - save_money
+  const usable_money = (await get_updated_player(ns)).money - save_money
+  const overview_items = RamLevel.ALL
+    .toSorted((a, b) => a.lv - b.lv)
+    .map(level => new RamLevelOverviewItem(level)
+      .fill_hosts(p_servers)
+      .determine_can_buy(usable_money, available_servers)
+      .determine_upgradable(ns, usable_money)
+    )
+
   for (let idx in overview_items) {
     const item = overview_items[idx]
-    const can_buy = Math.min(available_servers, Math.floor(usable_money / item.cost))
-    const values = {
-      lv: item.level.lv,
-      ram: item.level.ram,
-      cost: item.cost,
-      can_buy: can_buy,
-      host: "",
-      upgradable: "",
-    }
-    if (item.owned_servers.length === 0) {
-      ot.line(values)
-    } else {
-      const first_server = item.owned_servers[0]
-      values.host = first_server.host
-      const has_next_level = !first_server.current_level.is_max()
-      const upgrade_cost = has_next_level ? first_server.get_cost(ns, first_server.current_level.next_level()) : 0
-      const upgradable = has_next_level ? (upgrade_cost <= usable_money ? "Ja" : ns.formatNumber(upgrade_cost)) : "-"
-      values.upgradable = upgradable
-      ot.line(values)
-      item.owned_servers.slice(1).forEach(os => {
-        ot.line({ host: os.host }, false)
-      })
-    }
+    ot.line(item)
+
+    item.additional_hosts.forEach(host => {
+      ot.line({ host: host }, false)
+    })
   }
 
   ot.flush()
@@ -272,35 +101,23 @@ function print_overview(ns: NS, available_servers: number, overview_items: Serve
 
 /**
  * @param {NS} ns Netscript API.
- * @return {ServerLevel[]}
+ * @return {RamLevel[]}
  */
-function get_ram_levels(ns: NS): ServerLevel[] {
-  const levels = [...Array(ServerLevel.get_max_lv(ns) + 1).keys()] // [0..max]
+function get_ram_levels(ns: NS): RamLevel[] {
+  const levels = [...Array(RamLevel.get_max_lv(ns) + 1).keys()] // [0..max]
     .slice(1) // [1..max]
-    .map(ServerLevel.by_level) // as server levels
+    .map(RamLevel.by_level) // as server levels
   return levels
 }
 
 /**
  * Purchase servers for real. No more security checks. Writes a protocol to the terminal and a toast.
  * @param {NS} ns Netscript API.
- * @return {OwnedServer[]}
+ * @return {MyPurchasedServer[]}
  */
-function get_owned_servers(ns: NS): OwnedServer[] {
-  const servers = ns.getPurchasedServers().map(host => OwnedServer.build(ns, host))
+function get_owned_servers(ns: NS): MyPurchasedServer[] {
+  const servers = ns.getPurchasedServers().map(host => MyPurchasedServer.register(ns, host))
   return servers
-}
-
-/**
- * Get Info about RAM-Levels and what servers already have
- * @param {NS} ns Netscript API.
- * @param {OwnedServer[]?} owned_servers Server info of already purchased servers. Optional, will be directly queried if omitted.
- */
-function get_overview(ns: NS, owned_servers: OwnedServer[] | undefined = undefined) {
-  const ram_levels = get_ram_levels(ns)
-  const servers = owned_servers ?? get_owned_servers(ns)
-  const overview = ram_levels.map(level => new ServerLevelOverviewItem(level, ns.getPurchasedServerCost(2 ** level.lv), servers))
-  return overview
 }
 
 /**
@@ -334,7 +151,7 @@ async function buy_servers(ns: NS, count: number, ram: number, start_index: numb
   return hostnames
 }
 
-async function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer[], maxed_servers: number, total_server_limit: number, save_money: number, initial_server_size: number = 2): Promise<boolean> {
+async function fill_batch(ns: NS, batch_size: number, owned_servers: MyPurchasedServer[], maxed_servers: number, total_server_limit: number, save_money: number, initial_server_size: number = 2): Promise<boolean> {
   const owned_server_count = owned_servers.length
   // buy servers if possible and neccessary
   if (owned_server_count < total_server_limit) {
@@ -353,7 +170,7 @@ async function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer
       // if buying servers, buy smallest type possible and upgrade later
       const bought_servers = await buy_servers(ns, max_affordable, initial_server_size, owned_server_count)
       if (bought_servers.length > 0) {
-        owned_servers.push(...bought_servers.map(host => OwnedServer.build(ns, host)))
+        owned_servers.push(...bought_servers.map(host => MyPurchasedServer.register(ns, host)))
       }
       if (bought_servers.length < buy_servers_count) {
         // we could afford enough new servers, so no further buying possible / needed
@@ -368,11 +185,11 @@ async function fill_batch(ns: NS, batch_size: number, owned_servers: OwnedServer
  * 
  * @param {NS} ns Netscript API.
  * @param {number} batch_size Upgrade as many servers together
- * @param {OwnedServer[]} owned_servers Already owned servers
+ * @param {MyPurchasedServer[]} owned_servers Already owned servers
  * @param {number} server_limit Maximum amount of owned servers
  * @param {number} save_money How much money should not be used for purchasing.
  */
-async function max_out_server(ns: NS, batch_size: number, owned_servers: OwnedServer[], server_limit: number, save_money: number, options = { verbose: false }): Promise<void> {
+async function max_out_server(ns: NS, batch_size: number, owned_servers: MyPurchasedServer[], server_limit: number, save_money: number, options = { verbose: false }): Promise<void> {
   const maxed_servers = owned_servers.filter(os => os.current_level.is_max()).length
   const current_batch_size = batch_size - (maxed_servers % batch_size)
   if (!(await fill_batch(ns, current_batch_size, owned_servers, maxed_servers, server_limit, save_money))) {
@@ -387,7 +204,7 @@ async function max_out_server(ns: NS, batch_size: number, owned_servers: OwnedSe
 
   // sort by level descending
   // sort by host for identical levels
-  owned_servers.sort((a, b) => OwnedServer.compare(a, b, { order_by: ["lv", "host"], ascending: { lv: false, host: true } }))
+  owned_servers.sort((a, b) => MyPurchasedServer.compare(a, b, { order_by: ["lv", "host"], ascending: { lv: false, host: true } }))
 
   await ns.sleep(10)
 
@@ -403,25 +220,25 @@ async function max_out_server(ns: NS, batch_size: number, owned_servers: OwnedSe
   }
   /**
    * How much would it cost to upgrade each server in the batch to the given level.
-   * @param {ServerLevel} level Level to calculate the cost for.
+   * @param {RamLevel} level Level to calculate the cost for.
    * @return {number} The cost to upgrade each server in the batch to this level.
    */
-  function calculate_cost(level: ServerLevel): number {
-    const sum = batch.map(os => os.get_cost(ns, level)).reduce((sum, cost) => sum + cost, 0)
+  function calculate_cost(level: RamLevel): number {
+    const sum = batch.map(os => os.get_cost(level)).reduce((sum, cost) => sum + cost, 0)
     return sum
   }
   /**
    * Can the player afford the upgrade cost for this level?
-   * @param {ServerLevel} level Level to determine if the player can afford to upgrade to this level.
+   * @param {RamLevel} level Level to determine if the player can afford to upgrade to this level.
    * @return {boolean} False if the cost is greater than the money left for purchasing servers.
    */
-  function can_afford(level: ServerLevel): boolean {
+  function can_afford(level: RamLevel): boolean {
     return calculate_cost(level) <= usable_money
   }
   // increase base level while player can afford it
   // as long as the base level is below the minimum level of the servers,
   // the cost would be 0 - very affordable as long as the player has any money left
-  let target_level = ServerLevel.BASE_LEVEL() // start with base level as min level from batch
+  let target_level = RamLevel.BASE_LEVEL() // start with base level as min level from batch
   let next_level = target_level.next_level()
   while (can_afford(next_level)) {
     await ns.sleep(10)
@@ -502,13 +319,13 @@ export async function main(ns: NS) {
   }
 
   const SERVER_LIMIT = ns.getPurchasedServerLimit()
-  const owned_servers = get_owned_servers(ns)
+  const owned_servers = await get_updated_pserv_list(ns)
   let done_sth = false
 
   if (OPTS.buy > 0) {
     done_sth = true
-    const [new_host] = await buy_servers(ns, 1, ServerLevel.by_level(OPTS.buy).ram, owned_servers.length)
-    owned_servers.push(OwnedServer.build(ns, new_host))
+    const [new_host] = await buy_servers(ns, 1, RamLevel.by_level(OPTS.buy).ram, owned_servers.length)
+    owned_servers.push(MyPurchasedServer.register(ns, new_host))
   }
   if (OPTS.max > 0) {
     done_sth = true
@@ -517,8 +334,7 @@ export async function main(ns: NS) {
   if (OPTS.list) {
     done_sth = true
     const available_servers = SERVER_LIMIT - owned_servers.length
-    const overview_items = get_overview(ns, owned_servers)
-    print_overview(ns, available_servers, overview_items, OPTS.save)
+    await print_overview(ns, available_servers, owned_servers, OPTS.save)
   }
   if (!done_sth) {
     // if nothing else should be done

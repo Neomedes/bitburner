@@ -4,6 +4,7 @@ import { exec_script, disableLogs } from "lib/functions"
 import { MyJob, read_jobs_file } from "/lib/sing_jobs"
 import { MyFaction, read_faction_file } from "/lib/factions"
 import { MyPlayer, read_player_file } from "/lib/player"
+import { MyPurchasedServer, read_pserv_file } from "/lib/pserv"
 
 export async function update_server_list(ns: NS) {
   disableLogs(ns, "exec")
@@ -63,4 +64,10 @@ export async function get_updated_player(ns: NS): Promise<MyPlayer> {
   await exec_script(ns, "ds/player_fetch_money_sources.js", "home")
   await exec_script(ns, "ds/player_fetch_source_files.js", "home")
   return read_player_file(ns)
+}
+
+export async function get_updated_pserv_list(ns: NS): Promise<MyPurchasedServer[]> {
+  disableLogs(ns, "exec")
+  await exec_script(ns, "ds/pserv_init.js", "home")
+  return read_pserv_file(ns)
 }
