@@ -4,12 +4,17 @@ import { assert, reduce_to_max } from '/lib/functions'
 
 const EMPTY_TITLE: string = ""
 
+export type boolean_translations = [string, string, string?]
+
 function number_to_string(ns: NS, value: number): string { return ns.formatNumber(value) }
 function percentage_to_string(ns: NS, value: number): string { return value === 0 ? "-" : ns.formatPercent(value) }
 function ram_to_string(ns: NS, value: number): string { return ns.formatRam(value) }
 function integer_to_string(ns: NS, value: number): string { return `${value}` }
 function currency_to_string(ns: NS, value: number): string { return `$${ns.formatNumber(value)}` }
-function boolean_to_string(ns: NS, value: boolean, boolean_translations: [string, string]): string { return boolean_translations[value === true ? 0 : 1] }
+function boolean_to_string(ns: NS, value: boolean, translations: boolean_translations): string {
+    const index = value === true ? 0 : (value == null && translations.length > 2 ? 2 : 1)
+    return translations[index]!
+}
 
 /** Data types for constructing the table (used in formatting the data per line) */
 export enum OutputTableColumnType {
@@ -37,7 +42,7 @@ export enum OutputTableColumnType {
  * @param boolean_translations Boolean translations if the value is a boolean.
  * @return The formatted value.
  */
-function column_value_to_string(type: OutputTableColumnType, ns: NS, value: any, boolean_translations: [string, string]): string {
+function column_value_to_string(type: OutputTableColumnType, ns: NS, value: any, boolean_translations: boolean_translations): string {
     switch (type) {
         case OutputTableColumnType.Number:
             return number_to_string(ns, value)
@@ -70,13 +75,15 @@ export interface OutputTableColumnConfig {
     left_aligned: boolean,
     /** Should the column width be automatically determined */
     auto_width: boolean,
+    /** Individual boolean translations */
+    boolean_translations: boolean_translations
 }
 
-function get_values(ns: NS, config: OutputTableColumnConfig[], value: any, boolean_translations: [string, string]): string[] {
+function get_values(ns: NS, config: OutputTableColumnConfig[], value: any): string[] {
     const entries = Object.entries(value)
     const values = config.map(cfg => {
         const entry = (entries.find(e => cfg.property === e[0])?.[1]) ?? ""
-        return typeof (entry) === "string" ? entry : column_value_to_string(cfg.type, ns, entry, boolean_translations)
+        return typeof (entry) === "string" ? entry : column_value_to_string(cfg.type, ns, entry, cfg.boolean_translations)
     })
     return values
 }
@@ -88,7 +95,7 @@ interface OutputTableConfig {
     /** Should lines be drawn around the whole table? Defaults to false. */
     outer_lines: boolean,
     /** How to translate boolean values. First for true, second for false. Defaults are the German "Ja" and "Nein". */
-    boolean_translations: [string, string],
+    boolean_translations: boolean_translations,
 }
 
 interface OutputLine {
@@ -97,7 +104,7 @@ interface OutputLine {
     is_title: boolean,
 }
 
-function fill_partial_config(column: Partial<OutputTableColumnConfig>, index: number): OutputTableColumnConfig {
+function fill_partial_config(column: Partial<OutputTableColumnConfig>, index: number, default_boolean_translations: boolean_translations): OutputTableColumnConfig {
     const width = column.width ?? 0
     const is_auto_width = width < 1
     return {
@@ -107,11 +114,12 @@ function fill_partial_config(column: Partial<OutputTableColumnConfig>, index: nu
         type: column.type ?? OutputTableColumnType.String,
         left_aligned: (column.left_aligned ?? false) === !is_auto_width,
         auto_width: column.auto_width ?? is_auto_width,
+        boolean_translations: column.boolean_translations ?? default_boolean_translations
     }
 }
 
-function to_column_config(columns: Partial<OutputTableColumnConfig>[]): OutputTableColumnConfig[] {
-    return columns.map((c, i) => fill_partial_config(c, i))
+function to_column_config(columns: Partial<OutputTableColumnConfig>[], default_boolean_translations: boolean_translations): OutputTableColumnConfig[] {
+    return columns.map((c, i) => fill_partial_config(c, i, default_boolean_translations))
 }
 
 function validate_config(columns: OutputTableColumnConfig[]) {
@@ -142,7 +150,7 @@ export class OutputTable<T> {
      * @param value The content
      * @param counts Should this line count towards the block count
      */
-    line: (value: T, counts?: boolean) => void
+    line: (value: Partial<T>, counts?: boolean) => void
     /**
      * Flushes the content registered so far.
      */
@@ -164,15 +172,15 @@ export class OutputTable<T> {
         }
         const lines: OutputLine[] = []
 
-        const config = to_column_config(columns)
+        const config = to_column_config(columns, _table_config.boolean_translations)
         validate_config(config)
 
         this.headline = (...titles: string[]) => {
             assert(titles.length === config.length, `Headline: ${titles.length} titles given but ${config.length} columns registered.`)
             lines.push({ content: titles, counts: false, is_title: true })
         }
-        this.line = (value: T, counts: boolean = true) => {
-            const values = get_values(ns, config, value, _table_config.boolean_translations)
+        this.line = (value: Partial<T>, counts: boolean = true) => {
+            const values = get_values(ns, config, value)
             lines.push({ content: values, counts: counts, is_title: false })
         }
 
