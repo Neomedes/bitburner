@@ -13,7 +13,10 @@ These are:
 - ✅ List missing requirements to join a factions
 - ✅ Find currently available PAL (for money, reputation)
 - ✅ Consider pre-requisite augmentations in the buying order
-- Find next level PAL (how much money and/or reputation is needed until the next best augmentations are available)
+- ✅ Find next level PAL (how much money and/or reputation is needed until the next best augmentations are available)
+- Split information about reputation, hacking and overall score
+- Make it possible to first search for charisma upgrades and hacking upgrade thereafter
+- Split reputation into faction and company reputation
 
 ### More Cheap Data
 
