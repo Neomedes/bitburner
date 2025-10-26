@@ -1,3 +1,41 @@
+# Stephan's Bitburner Scripts
+
+This project contains my own scripts, partly copied from other sources, to play the game BitBurner as much on autoplay as possible
+
+## Current concepts
+
+### Folders
+
+This is the current folder strategy:
+
+```js
+autostart.js  // Run after every Node start and Augment installation
+cct/          // Scripts for solving contracts
+ds/           // data scripts - fetching and updating data
+data/         // txt files containing various data about the current state of the game
+hgw/          // Hacking servers for money and experience
+lib/          // Common functionality
+scripts/      // Direct use by player
+util/         // Targetted scripts with single functionality (for minimal RAM usage)
+```
+
+### Important scripts
+
+```js
+autostart.js  // Run after every Node start and Augment installation
+hgw/manager.js
+```
+
+### Handy aliases
+
+These aliases make it easier to use important scripts (like filling a server with a script or working with purchased servers)
+
+```js
+alias -g fill="run scripts/fill.js"
+alias -g pserv="run scripts/pserv2.js"
+alias -g list="run scripts/botnet.js"
+```
+
 ## TODO
 
 1. Use Player.jobs to reduce risk of errors in `sing_job.js`
@@ -60,20 +98,6 @@ There the strategy splits, depending on the current situation of the player.
 It is always neccessary to determine the currently best available route.
 There is always a time x until the 
 
-## Current concepts
-
-This is the current folder strategy:
-
-```js
-autostart.js  // Run after every Node start and Augment installation
-cct/          // Solving contracts
-ds/           // data scripts - fetching and updating data
-hgw/          // Hacking servers for money and experience
-lib/          // Common functionality
-scripts/      // Direct use by player
-util/         // Targetted scripts with single functionality (for minimal RAM usage)
-```
-
 ## Original installation
 
 This project was derived by these commands:
@@ -88,7 +112,7 @@ Attention: The last command refreshed definitions from the file `NetscriptDefini
 
 https://github.com/bitburner-official/bitburner-src/blob/dev/src/ScriptEditor/NetscriptDefinitions.d.ts
 
-## Overview over the original template
+# Overview over the original template
 Write all your typescript source code in the `/src` directory
 
 To autocompile as you save, run `npm run watch` in a terminal
@@ -106,7 +130,7 @@ To ensure both the game and typescript have no issues with import paths, your im
  * Paths must contain no leading slash
  * Paths must end with no file extension
 
- ### Examples:
+### Examples:
 
 To import `helperFunction` from the file `helpers.ts` located in the directory `src/lib/`: 
 
@@ -126,7 +150,7 @@ To import `someFunction` from the file `main.ts` located in the `src/` directory
 import { someFunction } from 'main'
 ```
 
-## Deugging
+## Debugging
 
 For debugging bitburner on Steam you will need to enable a remote debugging port. This can be done by rightclicking bitburner in your Steam library and selecting properties. There you need to add `--remote-debugging-port=9222` [Thanks @DarkMio]
 
