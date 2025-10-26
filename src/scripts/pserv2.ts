@@ -31,8 +31,8 @@ class RamLevelOverviewItem {
   fill_hosts(p_servers: MyPurchasedServer[]): RamLevelOverviewItem {
     const pserv_at_level = p_servers.filter(os => os.current_level.lv === this.lv)
     if (pserv_at_level.length > 0) {
-      this.host = p_servers[0].host
-      this.additional_hosts = p_servers.slice(1).map(s => s.host)
+      this.host = pserv_at_level[0].host
+      this.additional_hosts = pserv_at_level.slice(1).map(s => s.host)
     }
     return this
   }
