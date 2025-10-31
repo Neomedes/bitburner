@@ -187,9 +187,10 @@ export class OutputTable<T> {
         this.flush = () => {
             // calculate automatic width column
             let split_long_lines = false
+            const automatic_header = config.some(cfg => cfg.title !== EMPTY_TITLE)
             config.filter(cfg => cfg.auto_width).forEach(cfg => {
                 const index = config.indexOf(cfg)
-                const max_width = lines.map(l => l.content[index].length).reduce(reduce_to_max)
+                const max_width = Math.max(lines.map(l => l.content[index].length).reduce(reduce_to_max), cfg.title.length)
                 if (max_width > 80) {
                     // oversized line
                     cfg.width = 80
@@ -218,7 +219,6 @@ export class OutputTable<T> {
 
             if (_table_config.outer_lines) ns.tprintf(separator_line)
 
-            const automatic_header = config.some(cfg => cfg.title !== EMPTY_TITLE)
             if (automatic_header) {
                 ns.tprintf(line_template, ...config.map(cfg => cfg.title))
                 ns.tprintf(separator_line)
