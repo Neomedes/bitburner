@@ -1,74 +1,89 @@
 import { FactionName, NS } from "@ns"
-import { assertEqual, f_unique, intersect, minus, reduce_to_max, reduce_to_min, reduce_to_sum } from "lib/functions"
+import { assertEqual, f_unique, intersect, minus, reduce_to_max, reduce_to_min, reduce_to_product, reduce_to_sum } from "lib/functions"
 import { MyAugment } from "lib/sing_augs"
 import { get_updated_augment_list, get_updated_faction_list, get_updated_server_list } from "util/update_data"
-import { get_faction_requirements_info, MyFaction, RequirementData } from "/lib/factions"
+import { get_faction_difficulty, get_faction_req_difficulty, get_faction_requirements_info, MAX_DIFFICULTY, MyFaction, RequirementData } from "/lib/factions"
 import { OutputTable, OutputTableColumnType } from "/lib/tables"
+import { warning_t } from "/lib/log"
 
 const PURCHASE_INCREASE_PER_AUGMENT: number = 1.9
-const MAX_DIFFICULTY: number = 1_000_000
 
-interface ResultData {
+class ScoreVariant {
   name: string
-  score: number
-  price: number
-  rep: number
-  data: string
-}
+  short: string
+  get_value: (a: MyAugment) => number
+  reduce_fn: (a: number, b: number) => number
+  reduce_default: number
+  overwrite_on_then: boolean
 
-async function to_facs_data(ns: NS, filtered: MyAugment[], factions: string[] | null = null): Promise<ResultData[]> {
-  const grouped_by_fac = new Map<FactionName, MyAugment[]>()
-  filtered.forEach(a => {
-    a.factions.forEach(f => {
-      // skip nonvalid factions if any are given
-      if (factions != null && !factions.includes(f)) return
-
-      if (grouped_by_fac.has(f)) {
-        grouped_by_fac.get(f)!.push(a)
-      } else {
-        grouped_by_fac.set(f, [a])
-      }
-    })
-  })
-
-  const data: RequirementData = {
-    servers: await get_updated_server_list(ns),
-    augments: await get_updated_augment_list(ns, true),
+  constructor(
+    name: string,
+    short: string,
+    fn: (a: MyAugment) => number,
+    reduce_fn: (a: number, b: number) => number,
+    reduce_default: number,
+    overwrite_on_then: boolean = false) {
+    this.name = name
+    this.short = short
+    this.get_value = fn
+    this.reduce_fn = reduce_fn
+    this.reduce_default = reduce_default
+    this.overwrite_on_then = overwrite_on_then
   }
 
-  const result = grouped_by_fac.keys().map(
-    key => {
-      const augment_list = grouped_by_fac.get(key)!
-      const requirements = ns.singularity.getFactionInviteRequirements(key)
-      const result: ResultData = {
-        name: key,
-        score: augment_list.map(a => a.score).reduce(reduce_to_sum, 0),
-        price: augment_list.map(a => a.price).reduce(reduce_to_sum, 0),
-        rep: augment_list.map(a => a.req_reputation).reduce(reduce_to_max, 0),
-        data: get_faction_requirements_info(ns, data, requirements),
-      }
-      return result
-    }
-  ).toArray()
-  return result
+  static SCORE: ScoreVariant = new ScoreVariant("Score", "SC", (a: MyAugment) => a.score, reduce_to_sum, 0)
+  static HACK: ScoreVariant = new ScoreVariant("Faktor (HA)", "HA", (a: MyAugment) => a.hack_factor, reduce_to_product, 1)
+  static CHARISMA: ScoreVariant = new ScoreVariant("Faktor (CH)", "CH", (a: MyAugment) => a.charisma_factor, reduce_to_product, 1)
+  static REPUTATION: ScoreVariant = new ScoreVariant("Faktor (REP)", "REP", (a: MyAugment) => a.reputation_factor, reduce_to_product, 1)
+  static FACTION_REP: ScoreVariant = new ScoreVariant("Faktor (FR)", "FR", (a: MyAugment) => a.stats.faction_rep, reduce_to_product, 1)
+  static COMPANY_REP: ScoreVariant = new ScoreVariant("Faktor (CR)", "CR", (a: MyAugment) => a.stats.company_rep, reduce_to_product, 1)
+  static IDENTITY: ScoreVariant = new ScoreVariant("1", "1", (a: MyAugment) => 1, reduce_to_product, 1, true)
+
+  then(next_factor: ScoreVariant): ScoreVariant {
+    if (this.overwrite_on_then) return next_factor
+    if (next_factor.overwrite_on_then) return this
+
+    const new_short = [this.short, next_factor.short].join(", ")
+    const new_name = `F (${new_short})`
+    const that = this
+    const new_fn = (a: MyAugment) => that.get_value(a) * next_factor.get_value(a)
+    const new_reduce_fn = this.reduce_fn === reduce_to_sum || next_factor.reduce_fn === reduce_to_sum ? reduce_to_sum : reduce_to_product
+    const new_reduce_default = new_reduce_fn === reduce_to_sum ? 0 : 1
+    return new ScoreVariant(new_name, new_short, new_fn, new_reduce_fn, new_reduce_default)
+  }
 }
 
-/** @param {MyAugment[]} filtered @param {string[]?} factions @return {ResultData[]} */
-function to_augs_data(filtered: MyAugment[], factions: FactionName[]): ResultData[] {
-  return filtered.map(
+async function print_all_augs_data(ns: NS, scoring: ScoreVariant, from_all_facs: boolean) {
+
+  const available_factions = (await get_updated_faction_list(ns, true))
+    .filter(f => f.is_available)
+  if (available_factions.length < 1) return
+  const available_faction_names = available_factions.map(f => f.name)
+
+  const all_augments = await get_updated_augment_list(ns, true)
+  const req_data: RequirementData = {
+    augments: all_augments,
+    servers: await get_updated_server_list(ns)
+  }
+
+  const augments = all_augments
+    .filter(a => !a.owned) // only new augments
+    .filter(a => from_all_facs || intersect(a.factions, available_faction_names).length > 0) // only from factions already available
+  if (augments.length < 1) return
+
+  augments.sort((a, b) => scoring.get_value(b) - scoring.get_value(a)) // sort by score descending
+  const data = augments.map(
     a => {
       return {
         name: a.name,
-        score: a.score,
+        score: scoring.get_value(a),
         price: a.price,
         rep: a.req_reputation,
-        data: a.factions.filter(f => factions.includes(f)).join(", "),
+        diff: get_augment_difficulty(ns, a, augments, available_factions, req_data),
+        data: a.factions.filter(f => from_all_facs || available_faction_names.includes(f)).join(", "),
       }
     }
-  )
-}
-
-function print_data_table(ns: NS, data: ResultData[], last_col_title: string): void {
+  ).filter(d => d.score > 1 && d.diff < MAX_DIFFICULTY)
   const ot = new OutputTable(ns,
     [
       { title: "Nr", property: "no", width: 2 },
@@ -76,7 +91,8 @@ function print_data_table(ns: NS, data: ResultData[], last_col_title: string): v
       { title: "Name", property: "name", auto_width: true },
       { title: "Reputation", property: "rep", width: 10, type: OutputTableColumnType.Number },
       { title: "Score", property: "score", width: 10, type: OutputTableColumnType.Number },
-      { title: last_col_title, property: "data", auto_width: true },
+      { title: "Diff", property: "diff", width: 10, type: OutputTableColumnType.Number },
+      { title: "Factions", property: "data", auto_width: true },
     ]
   )
 
@@ -84,41 +100,70 @@ function print_data_table(ns: NS, data: ResultData[], last_col_title: string): v
   ot.flush()
 }
 
-async function print_all_augs_data(ns: NS, all_augments: MyAugment[]) {
-  const available_factions = (await get_updated_faction_list(ns, true))
-    .filter(f => f.is_available)
-    .map(f => f.name)
-  if (available_factions.length < 1) return
+async function print_all_facs_data(ns: NS, scoring: ScoreVariant) {
 
-  const augments = all_augments
-    .filter(a => !a.owned) // only new augments
-    .filter(a => intersect(a.factions, available_factions).length > 0) // only from factions already available
-  if (augments.length < 1) return
+  const all_factions = await get_updated_faction_list(ns, true)
+  const all_augments = await get_updated_augment_list(ns, true)
 
-  const data = to_augs_data(augments, available_factions)
+  const missing_augments = all_augments.filter(a => !a.owned)
+  const relevant_factions = all_factions.filter(f => missing_augments.some(a => a.factions.includes(f.name)))
+
+  const req_data: RequirementData = {
+    servers: await get_updated_server_list(ns),
+    augments: all_augments,
+  }
+
+  const data = relevant_factions.map(f => {
+    const augment_list = missing_augments.filter(a => a.factions.includes(f.name))
+    const relevant_aug_data = augment_list.map(a => {
+      return {
+        score: scoring.get_value(a),
+        price: a.price,
+        rep: a.req_reputation,
+      }
+    }).filter(d => d.score > 1)
+    const result = {
+      name: f.name,
+      score: relevant_aug_data.map(a => a.score).reduce(scoring.reduce_fn, scoring.reduce_default),
+      price: relevant_aug_data.map(a => a.price).reduce(reduce_to_sum, 0),
+      rep: relevant_aug_data.map(a => a.rep).reduce(reduce_to_max, 0),
+      data: get_faction_requirements_info(ns, req_data, f.invite_requirements),
+    }
+    return result
+  })
+    .filter(d => d.score > 1)
+
+  assertEqual(missing_augments.length > 0, data.length > 0)
+
   data.sort((a, b) => b.score - a.score) // sort by score descending
-  print_data_table(ns, data, "Voraussetzungen")
+  const ot = new OutputTable(ns,
+    [
+      { title: "Nr", property: "no", width: 2 },
+      { title: "Preis", property: "price", width: 10, type: OutputTableColumnType.Currency },
+      { title: "Name", property: "name", auto_width: true },
+      { title: "Reputation", property: "rep", width: 10, type: OutputTableColumnType.Number },
+      { title: "Score", property: "score", width: 10, type: OutputTableColumnType.Number },
+      { title: "Voraussetzungen", property: "data", auto_width: true },
+    ]
+  )
+
+  data.forEach((l, i) => ot.line({ no: i + 1, ...l }))
+  ot.flush()
 }
 
-async function print_all_facs_data(ns: NS, all_augments: MyAugment[]) {
-  const augs = all_augments.filter(a => !a.owned)
-  const data = await to_facs_data(ns, augs)
-  assertEqual(augs.length > 0, data.length > 0)
-
-  data.sort((a, b) => b.score - a.score) // sort by score descending
-  print_data_table(ns, data, "Factions")
-}
-
-function get_faction_difficulty(ns: NS, faction: MyFaction): number {
-  return faction.is_available ? 0 : MAX_DIFFICULTY
-}
-
-function get_augment_difficulty(ns: NS, augment: MyAugment, all_augments: MyAugment[], available_factions: MyFaction[]): number {
+function get_augment_difficulty(ns: NS, augment: MyAugment, all_augments: MyAugment[], available_factions: MyFaction[], req_data: RequirementData): number {
   const augment_factions = available_factions.filter(a => augment.factions.includes(a.name))
-  const faction_difficulty = augment_factions.map(f => get_faction_difficulty(ns, f)).reduce(reduce_to_min, MAX_DIFFICULTY)
-  const remaining_repuation = augment_factions.map(f => Math.max(augment.req_reputation - f.reputation, 0)).reduce(reduce_to_min)
+  const faction_difficulty = augment_factions.map(f => get_faction_difficulty(ns, req_data, f)).reduce(reduce_to_min, MAX_DIFFICULTY)
+  const remaining_repuation = augment_factions.map(f => Math.max(augment.req_reputation - f.reputation, 0)).reduce(reduce_to_min, MAX_DIFFICULTY)
   // Add faction difficulty and 0.1 per 100,000 reputation needed
-  return faction_difficulty + (remaining_repuation / 1_000_000)
+  let max_prerequisite_difficulty = 0
+  if (augment.req_augments.length > 0) {
+    max_prerequisite_difficulty = all_augments
+      .filter(a => augment.req_augments.includes(a.name))
+      .map(a => get_augment_difficulty(ns, a, all_augments, available_factions, req_data))
+      .reduce(reduce_to_max, 0)
+  }
+  return Math.max(max_prerequisite_difficulty, faction_difficulty + (remaining_repuation / 1_000_000))
 }
 
 function get_price_at_position(price: number, pos: number): number {
@@ -174,24 +219,39 @@ function filter_with_verbose_total(ns: NS, fn: (a: MyAugment, i: number, ar: MyA
   }
 }
 
-async function print_next_augments(ns: NS, all_augments: MyAugment[], maximum_difficulty: number, verbose: boolean = false) {
-  const available_money = ns.getPlayer().money
-  const available_factions = (await get_updated_faction_list(ns, true))
-    .filter(f => get_faction_difficulty(ns, f) <= maximum_difficulty)
-  if (available_factions.length < 1) return
+async function print_next_augments(ns: NS, scoring: ScoreVariant, allowed_difficulty: number, verbose: boolean = false) {
 
+  const all_factions = await get_updated_faction_list(ns, true)
+
+  const all_augments = await get_updated_augment_list(ns, true)
+  const req_data: RequirementData = {
+    augments: all_augments,
+    servers: await get_updated_server_list(ns)
+  }
+
+  const available_factions = all_factions.filter((f: MyFaction) => (get_faction_difficulty(ns, req_data, f) <= allowed_difficulty))
+  if (available_factions.length < 1) {
+    warning_t(ns, "Keine Factions verfügbar.")
+    return
+  }
   const available_faction_names = available_factions.map(f => f.name)
-  if (verbose) ns.tprintf("Durchsuche Augments folgender Factions:\n%s", available_faction_names.join(", "))
 
-  const available_augments = all_augments
-    .filter(filter_with_verbose_total(ns, a => !a.owned, verbose, "Besitz")) // only new augments
-    .filter(filter_with_verbose_total(ns, a => a.price <= available_money, verbose, "Kosten")) // at least the augment itself must be affordable
-    .filter(filter_with_verbose_total(ns, a => intersect(a.factions, available_faction_names).length > 0, verbose, "Faction")) // only from factions already available
-    .filter(filter_with_verbose_total(ns, (a, i, all) => get_augment_difficulty(ns, a, all, available_factions) <= maximum_difficulty, verbose, "Difficulty"))
-  if (verbose) ns.tprintf("%d Augments nach Filterung", available_augments.length)
-  if (available_augments.length < 1) return
+  const available_money = ns.getPlayer().money
 
-  available_augments.sort((a, b) => b.score - a.score) // sort by score descending
+  // determine filtering
+  const augment_filter = (a: MyAugment, i: number, all: MyAugment[]) =>
+    !a.owned
+    && a.price <= available_money
+    && intersect(a.factions, available_faction_names).length > 0
+    && get_augment_difficulty(ns, a, all, available_factions, req_data) <= allowed_difficulty
+
+  const available_augments = all_augments.filter(augment_filter)
+  if (available_augments.length < 1) {
+    warning_t(ns, "Keine Augments verfügbar.")
+    return
+  }
+
+  available_augments.sort((a, b) => scoring.get_value(b) - scoring.get_value(a))
 
   const pal: MyAugment[] = []
 
@@ -225,9 +285,37 @@ async function print_next_augments(ns: NS, all_augments: MyAugment[], maximum_di
     }
     pal.push(aug, ...missing_augments)
   }
+
+  const augment_count = (f: MyFaction) => pal.filter(a => a.factions.includes(f.name)).length
+  const best_factions = available_factions.toSorted((a, b) => augment_count(b) - augment_count(a))
+  const get_best_faction = (factions: FactionName[]) => best_factions.find(bf => factions.includes(bf.name))!.name
   pal.sort(sort_by_purchase_order(pal))
-  const data = to_augs_data(pal, available_faction_names)
-  print_data_table(ns, data, "Factions")
+
+  const ot = new OutputTable(ns,
+    [
+      { title: "Nr", property: "no", width: 2 },
+      { title: "Name", property: "name", auto_width: true },
+      { title: "Rec. Faction", property: "faction", auto_width: true },
+      { title: "Preis", property: "price", width: 10, type: OutputTableColumnType.Currency },
+      { title: "Reputation", property: "rep", width: 10, type: OutputTableColumnType.Number },
+      { title: scoring.name, property: "prio", auto_width: true, type: OutputTableColumnType.Number },
+      { title: "Score", property: "score", width: 10, type: OutputTableColumnType.Number },
+      { title: "Factions", property: "factions", auto_width: true },
+    ]
+  )
+
+  pal.forEach((a, i) => ot.line({
+    no: i + 1,
+    name: a.name,
+    faction: get_best_faction(a.factions),
+    price: a.price,
+    rep: a.req_reputation,
+    prio: scoring.get_value(a),
+    score: a.score,
+    factions: a.factions.filter(fn => available_factions.some(f => f.name === fn)).toSorted().join(", ")
+  }))
+  ot.flush()
+
   ns.tprintf("Gesamt-Preis: %s", ns.formatNumber(get_total_price(pal)))
   ns.tprintf("Gesamt-Score: %s", ns.formatNumber(MyAugment.calculate_score(pal)))
   ns.tprintf("Gesamt-Upgrade: +%s", ns.formatPercent(pal.map(a => a.overall_factor).reduce(reduce_to_sum, 1) - 1))
@@ -239,7 +327,13 @@ export async function main(ns: NS) {
     ['augs', false], // find best augments
     ['facs', false], // list factions instead of augments
     ['next', false], // find next augments
+    ['rep', false], // prefer reputation enhancing augments
+    ['frep', false], // prefer faction reputation enhancing augments
+    ['crep', false], // prefer company reputation enhancing augments
+    ['cha', false], // prefer charisma enhancing augments
+    ['hack', false], // prefer hacking enhancing augments
     ['diff', 0], // maximum difficulty to get the requirements for this augmentation
+    ['all', false], // maximum difficulty to get the requirements for this augmentation
     ['?', false], ['help', false], // get purchase augmentations list
   ])
   OPTS.help = OPTS.help || OPTS['?']
@@ -253,24 +347,46 @@ export async function main(ns: NS) {
     ns.tprintf(" ")
     ns.tprintf("Folgende Optionen hat das Skript %s:", ns.getScriptName())
     ns.tprintf(" ")
-    ns.tprintf("%-16s - %s", "--augs", "Beste Augments finden")
-    ns.tprintf("%-16s - %s", "--facs", "Factions mit den besten Augments ausgeben")
-    ns.tprintf("%-16s - %s", "--next", "Als nächstes zu kaufende Augments ermitteln")
-    ns.tprintf("%-16s - %s", "--diff NUM", "Maximale Schwierigkeit, um die Voraussetzungen eines Augments zu erfüllen. Default 0.")
-    ns.tprintf("%-16s - %s", "--help  / -?", "Diese Hilfe ausgeben")
+    ns.tprintf("%-32s - %s", "--facs [Score-Opts]", "Factions mit den besten Augments ausgeben")
+    ns.tprintf("%-32s - %s", "--augs [Score-Opts] [Aug-Opts]", "Beste Augments der bekannten Factions finden")
+    ns.tprintf("%-32s - %s", "--next [Score-Opts] [Req.-Opts]", "Als nächstes zu kaufende Augments ermitteln")
+    ns.tprintf("%-32s - %s", "--help  / -?", "Diese Hilfe ausgeben")
+    ns.tprintf(" ")
+    ns.tprintf("[Score-Opts] sind folgende:")
+    ns.tprintf("%-32s - %s", "--rep", "Benutze die Verbesserung der Reputations-Faktoren für den Score.")
+    ns.tprintf("%-32s - %s", "--frep", "Benutze die Verbesserung der Faction-Reputations-Faktoren für den Score.")
+    ns.tprintf("%-32s - %s", "--crep", "Benutze die Verbesserung der Unternehmens-Reputations-Faktoren für den Score.")
+    ns.tprintf("%-32s - %s", "--cha", "Benutze die Verbesserung der Charisma-Faktoren für den Score.")
+    ns.tprintf("%-32s - %s", "--hack", "Benutze die Verbesserung der Hacking-Faktoren für den Score.")
+    ns.tprintf("%-32s - %s", "--score", "Benutze den Standard-Score für die Bewertung.")
+    ns.tprintf(" ")
+    ns.tprintf("[Req.-Opts] sind folgende:")
+    ns.tprintf("%-32s - %s", "--diff NUM", "Maximale Schwierigkeit, um die Voraussetzungen eines Augments zu erfüllen. Default 0.")
+    ns.tprintf(" ")
+    ns.tprintf("[Aug-Opts] sind folgende:")
+    ns.tprintf("%-32s - %s", "--all", "Augments aller Factions ausgeben, auch von noch unbekannten Factions.")
     ns.exit()
   }
 
   if (OPTS.help) print_help_and_exit()
 
-  const all_augments = await get_updated_augment_list(ns, true)
 
-  if (OPTS.augs) {
-    await print_all_augs_data(ns, all_augments)
-  } else if (OPTS.facs) {
-    await print_all_facs_data(ns, all_augments)
+  // determine scoring
+  let scoring = ScoreVariant.IDENTITY
+  if (OPTS.rep) scoring = scoring.then(ScoreVariant.REPUTATION)
+  if (OPTS.frep) scoring = scoring.then(ScoreVariant.FACTION_REP)
+  if (OPTS.crep) scoring = scoring.then(ScoreVariant.COMPANY_REP)
+  if (OPTS.cha) scoring = scoring.then(ScoreVariant.CHARISMA)
+  if (OPTS.hack) scoring = scoring.then(ScoreVariant.HACK)
+  if (OPTS.score || scoring === ScoreVariant.IDENTITY) scoring = scoring.then(ScoreVariant.SCORE)
+
+  if (OPTS.facs) {
+    await print_all_facs_data(ns, scoring)
+  } else if (OPTS.augs) {
+    await print_all_augs_data(ns, scoring, OPTS.all as boolean)
   } else if (OPTS.next) {
-    await print_next_augments(ns, all_augments, OPTS.diff as number)
+    const allowed_difficulty = (OPTS.diff as number)
+    await print_next_augments(ns, scoring, allowed_difficulty)
   } else {
     print_help_and_exit()
   }

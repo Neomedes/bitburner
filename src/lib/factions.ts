@@ -2,8 +2,11 @@ import { CompanyName, FactionName, FactionWorkType, NodeStats, NS, PlayerRequire
 import { get_skills_diff, has_skills } from '/lib/player'
 import { MyServer } from '/lib/servers'
 import { MyAugment } from '/lib/sing_augs'
+import { reduce_to_max } from '/lib/functions'
 
 const FACTION_FILE = "/data/faction_data.txt"
+
+export const MAX_DIFFICULTY = 1_000_000_000
 
 export interface RequirementData {
     servers: MyServer[],
@@ -117,8 +120,12 @@ export function faction_req_to_string(ns: NS, requirement: PlayerRequirement): s
     }
 }
 
+export function get_faction_requirements_info(ns: NS, data: RequirementData, requirements: PlayerRequirement[]): string {
+    const missing_reqs = requirements.filter(req => !player_meets_faction_req(ns, data, req))
+    return missing_reqs.map(req => faction_req_to_string(ns, req)).join(", ")
+}
+
 export function get_faction_req_difficulty(ns: NS, data: RequirementData, requirement: PlayerRequirement): number {
-    const max_difficulty = 1_000_000_000
     function clamp_rel_0_10(value: number, min: number, max: number): number { return Math.pow(Math.E, (value - min) / max * 10) }
     function get_relative_difficulty(current_value: number, target_value: number, min: number, max: number) {
         if (target_value <= current_value) return 0
@@ -126,7 +133,7 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
     }
     function backdoor_difficulty(host: string): number {
         const target = data.servers.find(s => s.host === host)
-        if (target === undefined) return max_difficulty
+        if (target === undefined) return MAX_DIFFICULTY
         if (target.backdoor!) return 0
         return get_relative_difficulty(ns.getPlayer().skills.hacking, target.hack_needed!, 0, 10000)
     }
@@ -137,9 +144,9 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
             return requirement.conditions.map(cond => get_faction_req_difficulty(ns, data, cond)).reduce((sum, diff) => sum + diff, 0)
         case "someCondition":
             // return min
-            return requirement.conditions.map(cond => get_faction_req_difficulty(ns, data, cond)).reduce((sum, diff) => sum > diff ? diff : sum, max_difficulty)
+            return requirement.conditions.map(cond => get_faction_req_difficulty(ns, data, cond)).reduce((sum, diff) => sum > diff ? diff : sum, MAX_DIFFICULTY)
         case "not":
-            return max_difficulty - get_faction_req_difficulty(ns, data, requirement.condition)
+            return get_faction_req_difficulty(ns, data, requirement.condition) > 0 ? 0 : MAX_DIFFICULTY
         case "backdoorInstalled":
             return backdoor_difficulty(requirement.server)
         case "city":
@@ -158,7 +165,7 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
         case "location":
             return ns.getPlayer().location === requirement.location ? 0 : .05
         case "numAugmentations":
-            return data.augments.filter(aug => aug.installed).length >= requirement.numAugmentations ? 0 : max_difficulty
+            return data.augments.filter(aug => aug.installed).length >= requirement.numAugmentations ? 0 : MAX_DIFFICULTY
         case "skills":
             let diff = 0
             let skills_diff = get_skills_diff(ns.getPlayer().skills, requirement.skills)
@@ -171,7 +178,7 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
             diff += get_relative_difficulty(0, skills_diff.strength, 0, 100)
             return diff
         case "sourceFile":
-            return ns.singularity.getOwnedSourceFiles().some(sfl => sfl.n === requirement.sourceFile) ? 0 : max_difficulty
+            return ns.singularity.getOwnedSourceFiles().some(sfl => sfl.n === requirement.sourceFile) ? 0 : MAX_DIFFICULTY
         case "numPeopleKilled":
             return ns.getPlayer().numPeopleKilled >= requirement.numPeopleKilled ? 0 : (requirement.numPeopleKilled - ns.getPlayer().numPeopleKilled) * 0.05
         case "karma":
@@ -195,9 +202,8 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
     }
 }
 
-export function get_faction_requirements_info(ns: NS, data: RequirementData, requirements: PlayerRequirement[]): string {
-    const missing_reqs = requirements.filter(req => !player_meets_faction_req(ns, data, req))
-    return missing_reqs.map(req => faction_req_to_string(ns, req)).join(", ")
+export function get_faction_difficulty(ns: NS, data: RequirementData, faction: MyFaction): number {
+    return faction.is_available ? 0 : faction.invite_requirements.map(r => get_faction_req_difficulty(ns, data, r)).reduce(reduce_to_max, 0)
 }
 
 export class MyFaction {
@@ -270,7 +276,7 @@ export class MyFaction {
      */
     static fromJSON(obj: any): MyFaction {
         const s = new MyFaction(obj.name!)
-        s.set_requirements(obj.requirements)
+        s.set_requirements(obj.invite_requirements)
         s.set_enemies(obj.enemies)
         s.set_favor(obj.favor)
         s.set_reputation(obj.reputation)
