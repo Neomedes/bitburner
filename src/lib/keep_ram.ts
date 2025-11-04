@@ -32,7 +32,7 @@ export function write_keep_ram_file(ns: NS, entries: KeepRamEntry[]) {
  * @param {NS} ns
  * @return {KeepRamEntry[]} Loaded entries.
  */
-export function read_keep_ram_file(ns: NS) {
+export function read_keep_ram_file(ns: NS): KeepRamEntry[] {
   const keep_ram_data = ns.read(KEEP_RAM_FILE)
   const entries = keep_ram_data ? JSON.parse(keep_ram_data).map((l: any) => KeepRamEntry.fromJSON(l)) : []
   return entries
