@@ -11,6 +11,7 @@ export const MAX_DIFFICULTY = 1_000_000_000
 export interface RequirementData {
     servers: MyServer[],
     augments: MyAugment[],
+    factions: MyFaction[],
 }
 
 export function count_hacknet_prop(ns: NS, prop: (stats: NodeStats) => number): number {
@@ -203,7 +204,12 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
 }
 
 export function get_faction_difficulty(ns: NS, data: RequirementData, faction: MyFaction): number {
-    return faction.is_available ? 0 : faction.invite_requirements.map(r => get_faction_req_difficulty(ns, data, r)).reduce(reduce_to_max, 0)
+    // Faction is already available
+    if(faction.is_available) return 0
+    // Player already joined an enemy faction
+    if(faction.enemies.some(enemy => data.factions.find(f => f.name === enemy)!.joined_them)) return MAX_DIFFICULTY
+    // Calculate difficulty by determining the maximum difficulty of all individual requirements.
+    return faction.invite_requirements.map(r => get_faction_req_difficulty(ns, data, r)).reduce(reduce_to_max, 0)
 }
 
 export class MyFaction {

@@ -55,15 +55,16 @@ class ScoreVariant {
 
 async function print_all_augs_data(ns: NS, scoring: ScoreVariant, from_all_facs: boolean) {
 
-  const available_factions = (await get_updated_faction_list(ns, true))
-    .filter(f => f.is_available)
+  const all_factions = await get_updated_faction_list(ns, true)
+  const available_factions = all_factions.filter(f => f.is_available)
   if (available_factions.length < 1) return
   const available_faction_names = available_factions.map(f => f.name)
 
   const all_augments = await get_updated_augment_list(ns, true)
   const req_data: RequirementData = {
     augments: all_augments,
-    servers: await get_updated_server_list(ns)
+    servers: await get_updated_server_list(ns),
+    factions: all_factions,
   }
 
   const augments = all_augments
@@ -111,6 +112,7 @@ async function print_all_facs_data(ns: NS, scoring: ScoreVariant) {
   const req_data: RequirementData = {
     servers: await get_updated_server_list(ns),
     augments: all_augments,
+    factions: all_factions,
   }
 
   const data = relevant_factions.map(f => {
@@ -226,7 +228,8 @@ async function print_next_augments(ns: NS, scoring: ScoreVariant, allowed_diffic
   const all_augments = await get_updated_augment_list(ns, true)
   const req_data: RequirementData = {
     augments: all_augments,
-    servers: await get_updated_server_list(ns)
+    servers: await get_updated_server_list(ns),
+    factions: all_factions,
   }
 
   const available_factions = all_factions.filter((f: MyFaction) => (get_faction_difficulty(ns, req_data, f) <= allowed_difficulty))
