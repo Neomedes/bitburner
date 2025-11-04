@@ -39,11 +39,11 @@ export async function main(ns: NS) {
   async function run_once(ns: NS) {
     let step = 0
     try {
-      await run_script(ns, "util/cct_find.js"); step++
-      await run_script(ns, "util/cct_fetch_type.js"); step++
-      await run_script(ns, "util/cct_fetch_data.js"); step++
-      await run_script(ns, "util/cct_solve.js"); step++
-      await run_script(ns, "util/cct_commit.js"); step++
+      await run_script(ns, "ds/cct_find.js"); step++
+      await run_script(ns, "ds/cct_fetch_type.js"); step++
+      await run_script(ns, "ds/cct_fetch_data.js"); step++
+      await run_script(ns, "ds/cct_solve.js"); step++
+      await run_script(ns, "ds/cct_commit.js"); step++
     }
     finally {
       ns.printf("Looked for new contracts (%d steps finished)", step)
@@ -56,7 +56,7 @@ export async function main(ns: NS) {
    */
   async function create_dummies(ns: NS, types: string[]) {
     for (let t of types) {
-      await run_script(ns, "util/cct_dummy.js", 1, t)
+      await run_script(ns, "ds/cct_dummy.js", 1, t)
     }
   }
 

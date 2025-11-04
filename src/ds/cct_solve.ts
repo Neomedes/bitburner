@@ -45,7 +45,7 @@ export async function main(ns: NS) {
         .filter(t => t !== undefined)
         .filter(f_unique)
 
-    if (types.length > 0) log(ns, "Try solving %d types", types.length)
+    if (types.length > 0) log(ns, "Versuche, %d CCT-Typen zu lösen", types.length)
 
     const scripts: [CodingContractName, string | undefined][] = types.map(t => [t, get_solver_script(t)])
     scripts.filter(([t, s]) => s === undefined).forEach(([t, s]) => error_t(ns, "Kein CCT-Solver-Skript bekannt für '%s'", t))

@@ -11,8 +11,8 @@ export async function main(ns: NS) {
     })
   })
   if (ccts.length > 0) {
-    ns.toast(`Found ${ccts.length} contracts.`)
-    ns.printf("Found %d contracts.", ccts.length)
+    ns.toast(`${ccts.length} CCTs gefunden.`)
+    ns.printf("%d CCTs gefunden.", ccts.length)
   }
   write_cct_file(ns, ccts)
 }
