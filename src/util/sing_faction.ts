@@ -43,7 +43,7 @@ export async function main(ns: NS): Promise<void> {
     if (OPTS.help === true) {
         print_help_and_exit()
     } else if (factions_and_thresholds.length < 1) {
-        error_t(ns, "%s: Es wurde keine Faction angegeben, bei der gearbeitet werden soll.", ns.getScriptName())
+        error_t(ns, "Es wurde keine Faction angegeben, bei der gearbeitet werden soll.")
         print_help_and_exit()
     }
 
@@ -54,7 +54,7 @@ export async function main(ns: NS): Promise<void> {
         const faction_name = factions_and_thresholds.shift()!
         const target_reputation = parseInt(factions_and_thresholds.shift() ?? "0") // 0 means "do not wait"
         if (!is_faction(ns, faction_name)) {
-            error_t(ns, "%s: Faction '%s' ist nicht bekannt.", ns.getScriptName(), faction_name)
+            error_t(ns, "Faction '%s' ist nicht bekannt.", faction_name)
             continue
         }
 
@@ -64,10 +64,10 @@ export async function main(ns: NS): Promise<void> {
         const work_type = get_best_work_type(ns, faction_name)
         const working = ns.singularity.workForFaction(faction_name, work_type, with_focus)
         if (working) {
-            if (target_reputation > 0) { success_t(ns, "%s: Arbeite für %s bis zu einer Reputation von %s", ns.getScriptName(), faction_name, ns.formatNumber(target_reputation)) }
-            else { success_t(ns, "%s: Arbeite bis auf Widerruf für %s", ns.getScriptName(), faction_name) }
+            if (target_reputation > 0) { success_t(ns, "Arbeite für %s bis zu einer Reputation von %s", faction_name, ns.formatNumber(target_reputation)) }
+            else { success_t(ns, "Arbeite bis auf Widerruf für %s", faction_name) }
         } else {
-            error_t(ns, "%s: Konnte Arbeit für %s nicht beginnen.", ns.getScriptName(), faction_name)
+            error_t(ns, "Konnte Arbeit für %s nicht beginnen.", faction_name)
             continue
         }
         // wait until a target reputation is met

@@ -9,7 +9,7 @@ export async function main(ns: NS): Promise<void> {
         ["run_opts", ""], // Stringified JSON: Which run opts (threads, etc.) should be set?
     ]);
 
-    if (((OPTS["_"] as ScriptArg[]).length ?? 0) < 1) error_t(ns, "%s: Kein Skript angegeben!", ns.getScriptName())
+    if (((OPTS["_"] as ScriptArg[]).length ?? 0) < 1) error_t(ns, "Kein Skript angegeben!")
 
     const script = (OPTS["_"] as ScriptArg[]).shift()! as string
     const run_opts = JSON.parse(OPTS.run_opts as string) as RunOptions
@@ -27,7 +27,7 @@ export async function main(ns: NS): Promise<void> {
     }
 
     if (pid === 0) {
-        error_t(ns, "%s: Konnte Skript mit folgndem Aufruf nicht starten:", ns.getScriptName())
+        error_t(ns, "Konnte Skript mit folgendem Aufruf nicht starten:")
         error_t(ns, "run %s%s%s", script, run_opts_as_call_param(run_opts), script_args_as_string(run_args))
     }
 }

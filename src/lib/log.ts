@@ -5,60 +5,29 @@ Constants and functions to format and print messages
 import { ScriptArg } from "@ns";
 
 /** Color codes used for formatting terminal messages. */
-export const COLOR = {
-    black: '\u001b[30m',
-    red: '\u001b[31m',
-    green: '\u001b[32m',
-    yellow: '\u001b[33m',
-    blue: '\u001b[34m',
-    magenta: '\u001b[35m',
-    cyan: '\u001b[36m',
-    white: '\u001b[37m',
-    brightBlack: '\u001b[30;1m',
-    brightRed: '\u001b[31;1m',
-    brightGreen: '\u001b[32;1m',
-    brightYellow: '\u001b[33;1m',
-    brightBlue: '\u001b[34;1m',
-    brightMagenta: '\u001b[35;1m',
-    brightCyan: '\u001b[36;1m',
-    brightWhite: '\u001b[37;1m',
-    default: '\u001b[0m',
+export enum Color {
+    black = '\u001b[30m',
+    red = '\u001b[31m',
+    green = '\u001b[32m',
+    yellow = '\u001b[33m',
+    blue = '\u001b[34m',
+    magenta = '\u001b[35m',
+    cyan = '\u001b[36m',
+    white = '\u001b[37m',
+    brightBlack = '\u001b[30;1m',
+    brightRed = '\u001b[31;1m',
+    brightGreen = '\u001b[32;1m',
+    brightYellow = '\u001b[33;1m',
+    brightBlue = '\u001b[34;1m',
+    brightMagenta = '\u001b[35;1m',
+    brightCyan = '\u001b[36;1m',
+    brightWhite = '\u001b[37;1m',
+    brightPurple = '\u001b[38;2;128;128;255m',
+    default = '\u001b[0m',
 };
 
 /**
- * Formats a message as an error in red.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
- */
-export function error_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return ns.sprintf(`${COLOR.red}${msg}`, ...msg_args)
-}
-
-/**
- * Formats a message as a warning in yellow.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
- */
-export function warning_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return ns.sprintf(`${COLOR.yellow}${msg}`, ...msg_args)
-}
-
-/**
- * Formats a message as a success in green (slightly brighter than the terminal color).
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
- */
-export function success_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return ns.sprintf(`${COLOR.green}${msg}`, ...msg_args)
-}
-
-/**
  * Prepends the script's name for easier recognition of where some output came from.
- * @param {NS} ns
- * @param {string} msg
  */
 export function prepend_script(ns: NS, msg: string) {
     return ns.sprintf("%s: %s", ns.getScriptName(), msg)
@@ -66,18 +35,41 @@ export function prepend_script(ns: NS, msg: string) {
 
 /**
  * Prepends the current time for easier recognition of when something happened.
- * @param {NS} ns
- * @param {string} msg
  */
 export function prepend_time(ns: NS, msg: string) {
     return ns.sprintf("%s: %s", new Date(Date.now()).toISOString(), msg)
 }
 
 /**
+ * Formats a message with the given color (slightly brighter than the terminal color).
+ */
+export function colored_msg(ns: NS, color: Color, msg: string, ...msg_args: ScriptArg[]) {
+    return prepend_script(ns, ns.sprintf(`${color}${msg}`, ...msg_args))
+}
+
+/**
+ * Prints an message in the given color to the script log.
+ */
+export function colored(ns: NS, color: Color, msg: string, ...msg_args: ScriptArg[]) {
+    ns.printf(colored_msg(ns, color, msg, ...msg_args))
+}
+
+/**
+ * Prints a success message in green to the terminal.
+ */
+export function colored_t(ns: NS, color: Color, msg: string, ...msg_args: ScriptArg[]) {
+    ns.tprintf(colored_msg(ns, color, msg, ...msg_args))
+}
+
+/**
+ * Formats a message as an error in red.
+ */
+export function error_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
+    return colored_msg(ns, Color.red, msg, ...msg_args)
+}
+
+/**
  * Prints an error message in red to the script log.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
  */
 export function error(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
     ns.printf(error_msg(ns, msg, ...msg_args))
@@ -85,19 +77,20 @@ export function error(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
 
 /**
  * Prints an error message in red to the terminal.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
  */
 export function error_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
     ns.tprintf(error_msg(ns, msg, ...msg_args))
 }
 
 /**
+ * Formats a message as a warning in yellow.
+ */
+export function warning_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
+    return colored_msg(ns, Color.yellow, msg, ...msg_args)
+}
+
+/**
  * Prints an warning message in yellow to the script log.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
  */
 export function warning(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
     ns.printf(warning_msg(ns, msg, ...msg_args))
@@ -105,19 +98,20 @@ export function warning(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
 
 /**
  * Prints a warning message in yellow to the terminal.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
  */
 export function warning_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
     ns.tprintf(warning_msg(ns, msg, ...msg_args))
 }
 
 /**
+ * Formats a message as a success in green (slightly brighter than the terminal color).
+ */
+export function success_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
+    return colored_msg(ns, Color.brightGreen, msg, ...msg_args)
+}
+
+/**
  * Prints an success message in green to the script log.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
  */
 export function success(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
     ns.printf(success_msg(ns, msg, ...msg_args))
@@ -125,12 +119,30 @@ export function success(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
 
 /**
  * Prints a success message in green to the terminal.
- * @param {NS} ns
- * @param {string} msg
- * @param {ScriptArg[]} msg_args
  */
 export function success_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
     ns.tprintf(success_msg(ns, msg, ...msg_args))
+}
+
+/**
+ * Formats a message as a info in blue (slightly brighter than the terminal color).
+ */
+export function info_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
+    return colored_msg(ns, Color.brightCyan, msg, ...msg_args)
+}
+
+/**
+ * Prints an info message in blue to the script log.
+ */
+export function info(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
+    ns.printf(info_msg(ns, msg, ...msg_args))
+}
+
+/**
+ * Prints a info message in blue to the terminal.
+ */
+export function info_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
+    ns.tprintf(info_msg(ns, msg, ...msg_args))
 }
 
 /**

@@ -2,10 +2,12 @@ import { NS } from '@ns'
 import { error_t } from '/lib/log'
 import { get_updated_player, player_must_focus } from '/util/update_data'
 
-async function check_wait_finished(ns: NS, hack_level: number, charsima_level: number): Promise<boolean> {
-    if (hack_level < 1 && charsima_level < 1) return false
+async function check_wait_finished(ns: NS, target_hack_level: number, target_charsima_level: number): Promise<boolean> {
+    if (target_hack_level < 1 && target_charsima_level < 1) return false
     const player = await get_updated_player(ns)
-    return (hack_level > 0 && player.skills.hacking >= hack_level) || (charsima_level > 0 && player.skills.charisma >= charsima_level)
+    const hack_finished = target_hack_level < 1 || player.skills.hacking >= target_hack_level
+    const charisma_finished = target_charsima_level < 1 || player.skills.charisma >= target_charsima_level
+    return hack_finished && charisma_finished
 }
 
 export async function main(ns: NS): Promise<void> {
@@ -43,11 +45,11 @@ export async function main(ns: NS): Promise<void> {
     const course = Object.values(ns.enums.UniversityClassType).find(u => u.toString() === course_param)
 
     if (university === undefined) {
-        error_t(ns, "%s: Es gibt keine Universität mit Namen %s", ns.getScriptName(), university_param)
+        error_t(ns, "Es gibt keine Universität mit Namen %s", university_param)
     }
 
     if (course === undefined) {
-        error_t(ns, "%s: Es gibt keinen Kurs mit Namen %s", ns.getScriptName(), course_param)
+        error_t(ns, "Es gibt keinen Kurs mit Namen %s", course_param)
     }
 
     ns.singularity.universityCourse(university!, course!, await player_must_focus(ns))

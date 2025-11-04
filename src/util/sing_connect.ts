@@ -44,7 +44,7 @@ export async function main(ns: NS) {
   }
 
   if (!target_host || target_host === "") {
-    error_t(ns, "%s: Fehlerhafter Aufruf: Kein Ziel-Server angegeben!", ns.getScriptName())
+    error_t(ns, "Fehlerhafter Aufruf: Kein Ziel-Server angegeben!")
     if (!OPTS.silent) {
       print_help_and_exit()
     }
@@ -55,7 +55,7 @@ export async function main(ns: NS) {
   const target_server = servers.find(s => s.host === target_host)
 
   if (!target_server) {
-    error_t(ns, "%s: Ziel-Server %s unbekannt.", ns.getScriptName(), target_host)
+    error_t(ns, "Ziel-Server %s unbekannt.", target_host)
     ns.exit()
   }
 

@@ -1,7 +1,7 @@
 import { ScriptArg } from "@ns"
 import { exec_script, is_empty_str } from "lib/functions"
 import { get_keep_ram, read_keep_ram_file } from "lib/keep_ram"
-import { error_t, warning_t } from "lib/log"
+import { error_t, info_t, success_t, warning_t } from "lib/log"
 import { MyServer } from "lib/servers"
 import { get_updated_server_list } from "util/update_data"
 import { OutputTable, OutputTableColumnType } from "/lib/tables"
@@ -29,7 +29,7 @@ function get_matching_servers(search_term: string, all_servers: MyServer[]): MyS
  */
 function print_single_server(ns: NS, server: MyServer, verbose: boolean) {
   if (verbose) {
-    ns.tprintf("%s: Host gefunden: %s", ns.getScriptName(), server.host) // simple connect using this script
+    success_t(ns, "Host gefunden: %s", server.host) // simple connect using this script
     ns.tprintf("%-10s: %s", "Root", server.nuked === true ? "Ja" : "Nein")
     ns.tprintf("%-10s: %s", "Backdoor", server.backdoor === true ? "Ja" : "Nein")
     if (server.max_ram !== undefined && server.max_ram > 0)
@@ -63,7 +63,7 @@ function find_server(ns: NS, search_term: string, servers: MyServer[], silent: b
     // we just found one server that matched the search term
     print_single_server(ns, matching_servers[0], !silent)
   } else if (!silent) {
-    warning_t(ns, "%s: Es wurde kein Server gefunden", ns.getScriptName())
+    warning_t(ns, "Es wurde kein Server gefunden")
   }
 }
 
@@ -79,9 +79,9 @@ function connect_server(ns: NS, search_term: string, servers: MyServer[], silent
     ns.exec("util/sing_connect.js", "home", 1, matching_servers[0].host)
   } else if (!silent) {
     if (matching_servers.length > 1) {
-      warning_t(ns, "%s: Der Hostname '%s' konnte nicht eindeutig einem Server zugeordnet werden. (%d Treffer)", ns.getScriptName(), search_term, matching_servers.length)
+      warning_t(ns, "Der Hostname '%s' konnte nicht eindeutig einem Server zugeordnet werden. (%d Treffer)", search_term, matching_servers.length)
     } else {
-      warning_t(ns, "%s: Der Hostname '%s' konnte keinem Server zugeordnet werden.", ns.getScriptName(), search_term)
+      warning_t(ns, "Der Hostname '%s' konnte keinem Server zugeordnet werden.", search_term)
     }
   }
 }
@@ -106,10 +106,10 @@ async function open_backdoor(ns: NS, search_term: string, servers: MyServer[], s
     }
   } else if (!silent) {
     if (matching_servers.length > 1) {
-      warning_t(ns, "%s: Der Hostname '%s' konnte nicht eindeutig einem Server zugeordnet werden. %d Treffer:", ns.getScriptName(), search_term, matching_servers.length)
+      warning_t(ns, "Der Hostname '%s' konnte nicht eindeutig einem Server zugeordnet werden. %d Treffer:", search_term, matching_servers.length)
       matching_servers.forEach(s => ns.tprintf("%20s", s.host))
     } else {
-      warning_t(ns, "%s: Der Hostname '%s' konnte keinem Server zugeordnet werden.", ns.getScriptName(), search_term)
+      warning_t(ns, "Der Hostname '%s' konnte keinem Server zugeordnet werden.", search_term)
     }
   }
 }
@@ -125,7 +125,7 @@ async function open_backdoors(ns: NS, search_terms: string[], servers: MyServer[
   const use_standard_hosts = search_terms.length <= 0
   const host_terms = use_standard_hosts ? ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z"] : search_terms
   if (use_standard_hosts && !silent) {
-    ns.tprintf("%s: Öffne Backdoors auf Standard-Faction-Servern: %s", ns.getScriptName(), host_terms.join())
+    info_t(ns, "Öffne Backdoors auf Standard-Faction-Servern: %s", host_terms.join())
   }
   for (let search_term of host_terms) {
     await open_backdoor(ns, search_term, servers, silent, open_all)
@@ -227,7 +227,7 @@ function run_script_on_servers(ns: NS, servers: MyServer[], script: string, host
 
   const base_server_list = hosts?.length > 0 ? hosts.flatMap(h => get_matching_servers(h, servers)) : servers
   if (base_server_list.length < 1) {
-    error_t(ns, "%s: Es wurden keine Hosts angegeben, auf denen das Skript ausgeführt werden kann.", ns.getScriptName())
+    error_t(ns, "Es wurden keine Hosts angegeben, auf denen das Skript ausgeführt werden kann.")
   }
 
   const available_servers = base_server_list
@@ -242,11 +242,11 @@ function run_script_on_servers(ns: NS, servers: MyServer[], script: string, host
     .filter(s => s.max_threads > 0)
   if (available_servers.length < 1) {
     if (!silent) {
-      warning_t(ns, "%s: Es wurden von den %s Servern keine gefunden, auf denen das Skript ausgeführt werden kann.", ns.getScriptName(), base_server_list.length)
+      warning_t(ns, "Es wurden von den %s Servern keine gefunden, auf denen das Skript ausgeführt werden kann.", base_server_list.length)
     }
   } else {
     if (!silent) {
-      ns.tprintf("%s: Führe das Skript auf %d Servern aus", ns.getScriptName(), available_servers.length)
+      info_t(ns, "Führe das Skript auf %d Servern aus", available_servers.length)
     }
     available_servers.forEach(next_server => {
       ns.exec(script, next_server.host, next_server.max_threads, ...scripts_args)
@@ -269,7 +269,7 @@ function clear_scripts(ns: NS, servers: MyServer[], include_hosts: string[], exc
     return servers.filter(s => s.host !== "home" && !exclude_servers.includes(s))
   })()
 
-  if (!silent) ns.tprintf("%s: Beende Skripte auf %d Servern.", ns.getScriptName(), target_servers.length)
+  if (!silent) info_t(ns, "Beende Skripte auf %d Servern.", target_servers.length)
 
   target_servers.forEach(s => {
     ns.killall(s.host, true)
@@ -348,7 +348,7 @@ export async function main(ns: NS) {
   let servers = await get_updated_server_list(ns)
   if (OPTS.reload === true) {
     // do nothing, the servers were already initialized...
-    if (!OPTS.silent) ns.tprintf("%s: Serverliste neu geladen.", ns.getScriptName())
+    if (!OPTS.silent) info_t(ns, "Serverliste neu geladen.")
   } else if (OPTS.tree === true) {
     print_server_tree(ns, servers[0], servers)
   } else if (!is_empty_str(OPTS.find as string)) {

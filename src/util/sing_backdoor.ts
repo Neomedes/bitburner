@@ -1,6 +1,6 @@
 import { MyServer, write_server_file } from "lib/servers"
 import { get_updated_server_list } from "util/update_data"
-import { error_t, warning_t, success_t } from "lib/log"
+import { error_t, warning_t, success_t, info_t } from "lib/log"
 
 /**
  * Connects to a server
@@ -29,17 +29,17 @@ async function connect_to(ns: NS, target_server: MyServer, silent: boolean) {
 async function install_backdoor(ns: NS, target_server: MyServer, silent: boolean) {
   // check if player has enough hacking skill
   if ((target_server.hack_needed ?? 0) > ns.getHackingLevel()) {
-    if (!silent) warning_t(ns, "%s - %s: Hacking-Level zu niedrig, Level %d wird benötigt.", ns.getScriptName(), target_server.host, target_server.hack_needed ?? 0)
+    if (!silent) warning_t(ns, "(%s) Hacking-Level zu niedrig, Level %d wird benötigt.", target_server.host, target_server.hack_needed ?? 0)
     return false
   }
   // Check if we have root access
   if (!(target_server.nuked ?? false)) {
-    if (!silent) warning_t(ns, "%s - %s: Kein Root-Zugang zum System.", ns.getScriptName(), target_server.host)
+    if (!silent) warning_t(ns, "(%s) Kein Root-Zugang zum System.", target_server.host)
     return false
   }
   // Check if backdoor is already installed
   if (target_server.backdoor ?? false) {
-    if (!silent) success_t(ns, "%s - %s: Backdoor ist bereits installiert.", ns.getScriptName(), target_server.host)
+    if (!silent) success_t(ns, "(%s) Backdoor ist bereits installiert.", target_server.host)
     return false
   }
   // connect to server
@@ -77,7 +77,7 @@ export async function main(ns: NS) {
   }
 
   if (target_hosts.filter(h => h && h !== "").length < 1) {
-    error_t(ns, "%s: Fehlerhafter Aufruf: Kein Ziel-Server angegeben!", ns.getScriptName())
+    error_t(ns, "Fehlerhafter Aufruf: Kein Ziel-Server angegeben!")
     if (!OPTS.silent) {
       print_help_and_exit()
     }
@@ -92,7 +92,7 @@ export async function main(ns: NS) {
     const target_server = servers.find(s => s.host === target_host)
     // is this called with a valid server
     if (!target_server) {
-      warning_t(ns, "%s: Ziel-Server %s unbekannt.", ns.getScriptName(), target_host)
+      warning_t(ns, "Ziel-Server %s unbekannt.", target_host)
       continue
     }
     const result = await install_backdoor(ns, target_server, OPTS.silent === true)
@@ -107,13 +107,13 @@ export async function main(ns: NS) {
   // try to reach the initial server
   // first go back to home
   if (!OPTS.silent) {
-    ns.tprintf("%s: Ausführung beendet, kehre nach '%s' zurück.", ns.getScriptName(), initial_host)
+    info_t(ns, "Ausführung beendet, kehre nach '%s' zurück.", initial_host)
   }
   if (initial_host !== "home") {
     // we must go further
     const initial_server = servers.find(s => s.host === initial_host)
     if (!connect_to(ns, initial_server!, OPTS.silent === true)) {
-      warning_t(ns, "%s: Kehre stattdessen zu home zurück.", ns.getScriptName(), initial_host)
+      warning_t(ns, "Fehler beim Zurückkehren, kehre stattdessen zu home zurück.")
       ns.exit()
     }
   } else {

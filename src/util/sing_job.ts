@@ -1,5 +1,5 @@
 import { NS } from '@ns'
-import { error_t } from '/lib/log'
+import { error_t, info_t } from '/lib/log'
 import { MyJob } from '/lib/sing_jobs'
 import { get_updated_job_list, player_must_focus } from '/util/update_data'
 
@@ -94,7 +94,7 @@ export async function main(ns: NS): Promise<void> {
     if (OPTS.help === true) {
         print_help_and_exit()
     } else if (companies.length < 1) {
-        error_t(ns, "%s: Es wurde kein Unternehmen angegeben, bei dem gearbeitet werden soll.", ns.getScriptName())
+        error_t(ns, "Es wurde kein Unternehmen angegeben, bei dem gearbeitet werden soll.")
         print_help_and_exit()
     }
 
@@ -102,7 +102,7 @@ export async function main(ns: NS): Promise<void> {
     const valid_names = Object.values(ns.enums.CompanyName)
     const company_name = valid_names.find(name => name.toLowerCase() === company_query)
     if (company_name === undefined) {
-        error_t(ns, "%s: Es gibt kein Unternehmen mit dem Namen %s.", ns.getScriptName(), ns.args[0].toString())
+        error_t(ns, "Es gibt kein Unternehmen mit dem Namen %s.", ns.args[0].toString())
         ns.exit()
     }
 
@@ -111,7 +111,7 @@ export async function main(ns: NS): Promise<void> {
         .filter(job => job.info.field === "IT")
 
     if (all_jobs.length < 1) {
-        error_t(ns, "%s: Keine Jobs in der IT von %s gefunden! Bitte das Skript erweitern.", ns.getScriptName(), company_name)
+        error_t(ns, "Keine Jobs in der IT von %s gefunden! Bitte das Skript erweitern.", company_name)
         ns.exit();
     }
 
@@ -149,7 +149,7 @@ export async function main(ns: NS): Promise<void> {
         // the best job is the one where no better exists or is not available (yet)
         const next_job = get_next_available_job(available_jobs, current_job)
         if (next_job === undefined) {
-            error_t(ns, "%s: Keine Position zum Arbeiten bei %s gefunden!", ns.getScriptName(), company_name)
+            error_t(ns, "Keine Position zum Arbeiten bei %s gefunden!", company_name)
             ns.exit()
         }
 
@@ -158,12 +158,10 @@ export async function main(ns: NS): Promise<void> {
         current_job = next_job
 
         if (OPTS.ladder === true) {
-            ns.tprintf("%s:", ns.getScriptName())
-            ns.tprintf(" ")
-            ns.tprintf("Karriereleiter für %s:", company_name)
+            info_t(ns, "Karriereleiter für %s:", company_name)
             all_jobs.forEach(job => {
                 const prefix = job.info.name === current_job!.info.name ? "-> " : "   "
-                ns.tprintf("%s%-24s", prefix, job.to_string({ omit_company: true, omit_field: true }))
+                info_t(ns, "%s%-24s", prefix, job.to_string({ omit_company: true, omit_field: true }))
             })
         }
 
@@ -185,7 +183,7 @@ export async function main(ns: NS): Promise<void> {
         }
         let work_successful = await work_until_target(ns, reputation_work_config)
         if (!work_successful) {
-            error_t(ns, "%s: Abbruch: Konnte nicht für %s arbeiten.", ns.getScriptName(), company_name)
+            error_t(ns, "Abbruch: Konnte nicht für %s arbeiten.", company_name)
             return
         }
 
@@ -198,13 +196,13 @@ export async function main(ns: NS): Promise<void> {
                 if (ns.getPlayer().city !== ns.enums.CityName.Sector12) {
                     const travelled = ns.singularity.travelToCity(ns.enums.CityName.Sector12)
                     if (!travelled) {
-                        error_t(ns, "%s: Abbruch: Konnte nicht nach Sektor 12 fliegen.", ns.getScriptName())
+                        error_t(ns, "Abbruch: Konnte nicht nach Sektor 12 fliegen.")
                         return false
                     }
                 }
                 const studying = ns.singularity.universityCourse("Rothman University", ns.enums.UniversityClassType.management)
                 if (!studying) {
-                    error_t(ns, "%s: Abbruch: Konnte kein Management an der Rothman studieren.", ns.getScriptName())
+                    error_t(ns, "Abbruch: Konnte kein Management an der Rothman studieren.")
                     return false
                 }
                 return true
@@ -215,7 +213,5 @@ export async function main(ns: NS): Promise<void> {
             return
         }
     }
-
-    //ns.singularity.workForCompany(company_name, false)
 
 }

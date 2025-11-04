@@ -201,7 +201,7 @@ export async function main(ns: NS) {
     })
     if (cheapestUpgrade === undefined) {
       // there is no cheapest upgrade
-      success_t(ns, "%s: Es gibt nichts mehr zu updaten. Skript wird beendet.", ns.getScriptName())
+      success_t(ns, "Es gibt nichts mehr zu updaten. Skript wird beendet.")
       break
     }
     // upgrade when enough money is available

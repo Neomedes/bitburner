@@ -359,7 +359,7 @@ function find_attacker(ns: NS, attack_host: string, servers: MyServer[]): MyServ
   if (attack_host && attack_host !== "") {
     const attack_server = servers.find(s => s.host === attack_host)
     if (!attack_server) {
-      error_t(ns, "%s: Server %s (Angriff) existiert nicht.", ns.getScriptName(), attack_host)
+      error_t(ns, "Server %s (Angriff) existiert nicht.", attack_host)
       ns.exit()
     }
     ns.tprintf("Es wurde %s als Angriffsserver gesetzt.", attack_server.host)
@@ -379,7 +379,7 @@ function find_attacker(ns: NS, attack_host: string, servers: MyServer[]): MyServ
       return !ns.isRunning(mgr_pid)
     })
   if (!psrv) {
-    error_t(ns, "%s: Es wurde kein Angriffsserver angegeben und es wurde auch kein freier pserv gefunden.", ns.getScriptName())
+    error_t(ns, "Es wurde kein Angriffsserver angegeben und es wurde auch kein freier pserv gefunden.")
     ns.exit()
   }
   ns.tprintf("Es wurde %s als Angreifer ausgewählt.", psrv.host)
@@ -396,7 +396,7 @@ function find_target(ns: NS, target_host: string, servers: MyServer[]): MyServer
   if (target_host && target_host !== "") {
     const target_server = servers.find(s => s.host === target_host)
     if (!target_server) {
-      error_t(ns, "%s: Server %s (Ziel) existiert nicht.", ns.getScriptName(), target_host)
+      error_t(ns, "Server %s (Ziel) existiert nicht.", target_host)
       ns.exit()
     }
     ns.tprintf("Es wurde %s als Ziel gesetzt.", target_server.host)
@@ -404,7 +404,7 @@ function find_target(ns: NS, target_host: string, servers: MyServer[]): MyServer
   }
   const target_server = choose_target(servers)
   if (!target_server) {
-    error_t(ns, "%s: Es konnte automatisch kein Ziel ermittelt werden und es wurde keines angegeben.", ns.getScriptName())
+    error_t(ns, "Es konnte automatisch kein Ziel ermittelt werden und es wurde keines angegeben.")
     ns.exit()
   }
   ns.tprintf("Es wurde %s als Ziel ausgewählt.", target_server.host)
@@ -463,7 +463,7 @@ export async function main(ns: NS) {
       await ns.sleep(100)
     }
   } catch (e: any) {
-    error_t(ns, "%s: Exception: %s", ns.getScriptName(), e)
+    error_t(ns, "Exception: %s", e)
   } finally {
     ns.rm(pid_file)
   }
