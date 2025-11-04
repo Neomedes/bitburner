@@ -1,75 +1,105 @@
 import { KeepRamEntry, read_keep_ram_file, get_keep_ram } from "lib/keep_ram"
 import { MyServer, read_server_file } from "lib/servers"
-import { disableLogs, finished, all_finished } from "lib/functions"
+import { disableLogs, finished, all_finished, is_empty_str, reduce_to_sum } from "lib/functions"
 import { error_t } from "lib/log"
 import { get_updated_server_list } from "/util/update_data"
 
-const HACK_SCRIPT = "hgw/hack.js"
-const GROW_SCRIPT = "hgw/grow.js"
-const WEAKEN_SCRIPT = "hgw/weaken.js"
+interface ScriptInfo {
+  name: string,
+  path: string,
+  ram: number,
+  parts: number,
+}
 
-/**
- * @param {NS} ns The Netscript API.
- * @param {MyServer[]} all_servers
- * @param {string} target
- * @param {KeepRamEntry[]} keep_ram_entries
- * @param {number} threads Number of threads to start. 0 or less to start as much as possible.
- * @param {string} script
- * @return {number[]} The PIDs of the started scripts.
- */
-function start_threads(ns: NS, all_servers: MyServer[], target: string, keep_ram_entries: KeepRamEntry[], threads: number, script: string): number[] {
-  let remaining_thread_count = threads > 0 ? threads : 100
-  ns.printf("Starte %s Threads für Skript %s", threads > 0 ? `${threads}` : "möglichst viele", script)
-  const available_servers = all_servers
-    //.filter(s => s.host !== target)
-    .map(s => {
-      const ram_buffer = get_keep_ram(keep_ram_entries, s.host)
-      const ram_per_thread = ns.getScriptRam(script, s.host)
-      const max_threads = ram_per_thread > 0 && s.max_ram !== undefined && s.ram_used !== undefined ? Math.max(Math.floor((s.max_ram - s.ram_used - ram_buffer) / ram_per_thread), 0) : 0
-      return { host: s.host, max_threads }
-    })
-    .filter(s => s.max_threads > 0)
+const SCRIPTS = {
+  HACK: { name: "Hack", path: "hgw/hack.js", ram: 1.7, parts: 1 } as ScriptInfo,
+  GROW: { name: "Grow", path: "hgw/grow.js", ram: 1.75, parts: 2 } as ScriptInfo,
+  WEAKEN: { name: "Weaken", path: "hgw/weaken.js", ram: 1.75, parts: 2 } as ScriptInfo,
+}
 
-  const pids = []
-  while (remaining_thread_count > 0) {
-    const next_server = available_servers.shift()
-    if (next_server === undefined) break
-    const threads2use = threads > 0 ? Math.min(next_server.max_threads, remaining_thread_count) : next_server.max_threads
-    const new_pid = ns.exec(script, next_server.host, threads2use, target)
-    pids.push(new_pid)
-    if (threads > 0) {
-      remaining_thread_count -= threads2use
+interface ScriptThreadInfo {
+  /** Script to run */
+  script_path: string,
+  /** Number of threads to run */
+  threads: number,
+}
+
+interface ThreadDistribution {
+  /** Host to run script on */
+  host: string,
+  /** What scripts to run with how many threads */
+  threads: ScriptThreadInfo[],
+  /** How much RAM is left */
+  ram_left: number,
+}
+
+// copy hgw scripts to all nuked servers
+function copy_scripts(ns: NS, minions: MyServer[]) {
+  minions
+    .filter(s => s.host !== "home")
+    .forEach(srv => ns.scp([SCRIPTS.HACK.path, SCRIPTS.GROW.path, SCRIPTS.WEAKEN.path], srv.host, "home"))
+}
+
+function calculate_thread_distributions(ns: NS, minions: MyServer[], scripts: ScriptInfo[], keep_ram_data: KeepRamEntry[]): ThreadDistribution[] {
+  // Return nothing when no scripts or no minions are given.
+  if (scripts.length < 1 || minions.length < 1) return []
+  // Initialize empty thread distribution
+  const distributions = minions.map(srv => {
+    const dist: ThreadDistribution = {
+      host: srv.host,
+      threads: [],
+      ram_left: Math.max(0, srv.max_ram - srv.ram_used - get_keep_ram(keep_ram_data, srv.host)),
     }
-  }
-  return pids
+    return dist
+  }).filter(dist => dist.ram_left > 0)
+  // Get max RAM needed per script by sorting scripts in descending order of RAM needed and use the first script's RAM.
+  const max_ram_per_script_needed = scripts.toSorted((a, b) => b.ram - a.ram)[0].ram
+  // Calculate how many threads per script can be maintained on the total RAM
+  const total_threads_available = distributions.map(dist => Math.floor(dist.ram_left / max_ram_per_script_needed)).reduce(reduce_to_sum)
+  const total_parts_per_batch = scripts.map(s => s.parts).reduce(reduce_to_sum)
+  const total_batches = Math.floor(total_threads_available / total_parts_per_batch)
+  // for every script: fill all servers with the required amount of threads for this script
+  scripts.forEach(scr => {
+    let remaining_threads = total_batches * scr.parts
+    while (remaining_threads > 0) {
+      const next_dist2use = distributions.find(dist => dist.ram_left >= scr.ram)
+      if (next_dist2use === undefined) break
+      const new_threads = Math.min(Math.floor(next_dist2use.ram_left / scr.ram), remaining_threads)
+      next_dist2use.threads.push({ script_path: scr.path, threads: new_threads })
+      next_dist2use.ram_left -= new_threads * scr.ram
+      remaining_threads -= new_threads
+    }
+  })
+
+  // return all distributions that have threads filled
+  return distributions.filter(dist => dist.threads.length > 0)
 }
 
-/**
- * @param {NS} ns
- * @param {MyServer[]} all_servers
- * @param {string} target
- * @param {KeepRamEntry[]} keep_ram_entries
- * @param {number} hack_thread_count
- */
-async function hack_cycle(ns: NS, all_servers: MyServer[], target: string, keep_ram_entries: KeepRamEntry[], hack_thread_count: number) {
-  const pids = []
-  pids.push(...start_threads(ns, all_servers, target, keep_ram_entries, hack_thread_count, HACK_SCRIPT))
-  pids.push(...start_threads(ns, all_servers, target, keep_ram_entries, -1, WEAKEN_SCRIPT))
+function prep_needed(target: MyServer): boolean {
+  return target.min_security < target.current_security || target.max_money > target.current_money
+}
+
+async function run_distributions(ns: NS, distributions: ThreadDistribution[], target_host: string) {
+  const pids = distributions.flatMap(dist => {
+    return dist.threads.map(thr => {
+      return ns.exec(thr.script_path, dist.host, thr.threads, target_host)
+    })
+  }).filter(pid => pid !== 0)
   await all_finished(ns, pids)
 }
 
-/**
- * @param {NS} ns
- * @param {MyServer[]} all_servers
- * @param {string} target
- * @param {KeepRamEntry[]} keep_ram_entries
- * @param {number} hack_thread_count
- */
-async function prep_cycle(ns: NS, all_servers: MyServer[], target: string, keep_ram_entries: KeepRamEntry[], grow_thread_count: number) {
-  const pids = []
-  pids.push(...start_threads(ns, all_servers, target, keep_ram_entries, grow_thread_count, GROW_SCRIPT))
-  pids.push(...start_threads(ns, all_servers, target, keep_ram_entries, -1, WEAKEN_SCRIPT))
-  await all_finished(ns, pids)
+async function prep_target(ns: NS, minions: MyServer[], keep_ram_data: KeepRamEntry[], target: MyServer) {
+  const scripts: ScriptInfo[] = []
+  if (target.min_security < target.current_security) scripts.push(SCRIPTS.WEAKEN)
+  if (target.max_money > target.current_money) scripts.push(SCRIPTS.GROW)
+  const thread_distributions = calculate_thread_distributions(ns, minions, scripts, keep_ram_data)
+  await run_distributions(ns, thread_distributions, target.host)
+}
+
+async function hack_target(ns: NS, minions: MyServer[], keep_ram_data: KeepRamEntry[], target_host: string) {
+  const scripts = [SCRIPTS.HACK, SCRIPTS.GROW, SCRIPTS.WEAKEN]
+  const thread_distributions = calculate_thread_distributions(ns, minions, scripts, keep_ram_data)
+  await run_distributions(ns, thread_distributions, target_host)
 }
 
 /**
@@ -78,51 +108,53 @@ async function prep_cycle(ns: NS, all_servers: MyServer[], target: string, keep_
 export async function main(ns: NS) {
   disableLogs(ns, "exec", "scp")
   // The target server, i.e. the server to hack.
-  const [target] = ns.args.map(a => a.toString())
-  if (!target || target === "") {
+  const target_host = ns.args[0] as string
+
+  if (is_empty_str(target_host)) {
     error_t(ns, "Kein Ziel angegeben!")
-    ns.tprintf("Aufruf: %s ZIEL", ns.getScriptName())
-    ns.exit()
+    return ns.exit()
   }
 
-
-  let all_servers = await get_updated_server_list(ns)
-  let target_server = all_servers.find(s => s.host === target)
-  if (target_server === undefined) {
-    error_t(ns, "Server %s ist unbekannt.", target)
-    ns.exit()
-    return
+  let target: MyServer
+  async function update_target() {
+    const target_server = (await get_updated_server_list(ns)).find(s => s.host === target_host)
+    if (target_server === undefined) {
+      error_t(ns, "Ziel '%s' ist unbekannt.", target_host)
+      return ns.exit()
+    }
+    target = target_server
   }
+  await update_target()
 
-  // copy hgw scripts to all nuked servers
-  function copy_scripts(all_servers: MyServer[]) {
-    const all_scripts = [HACK_SCRIPT, GROW_SCRIPT, WEAKEN_SCRIPT]
-    all_servers
-      .filter(s => s.host !== "home")
-      .forEach(srv => ns.scp(all_scripts, srv.host, "home"))
+
+
+  let all_servers: MyServer[] = [], minions: MyServer[] = [], test_for_new_minions: boolean = true
+
+  async function update_minions() {
+    if (test_for_new_minions) {
+      all_servers = await get_updated_server_list(ns)
+      const possible_minions = all_servers.filter(s => s.max_ram > 0)
+      minions = possible_minions.filter(s => s.nuked)
+      copy_scripts(ns, possible_minions)
+      minions.sort((a, b) => a.max_ram - b.max_ram) // sort by max RAM ascending
+      test_for_new_minions = (possible_minions.length > minions.length)
+    }
   }
+  await update_minions()
+
+  async function prep() {
+    while (prep_needed(target)) {
+      await prep_target(ns, minions, read_keep_ram_file(ns), target)
+      await update_target()
+    }
+  }
+  await prep()
 
   // Continuously hack/grow/weaken the target server.
   for (; ;) {
-    const keep_ram_entries = read_keep_ram_file(ns)
-
-    // 2 GB - count = (50% to hack) / (% hacked by 1 thread) / (chance to succeed hacking) 
-    const hack_thread_count = Math.ceil(0.5 / ns.hackAnalyze(target) / ns.hackAnalyzeChance(target))
-    // 1 GB - how many threads would be needed to grow the money by the relative multiplier
-    const grow_thread_count = Math.ceil(ns.growthAnalyze(target, 2.2, 1))
-
-    copy_scripts(all_servers)
-    if (target_server.max_money !== target_server.current_money) {
-      await prep_cycle(ns, all_servers, target, keep_ram_entries, grow_thread_count)
-    } else if (target_server.min_security !== target_server.current_security) {
-      const pids = start_threads(ns, all_servers, target, keep_ram_entries, -1, WEAKEN_SCRIPT)
-      await all_finished(ns, pids)
-    } else {
-      // target is prepped
-      await hack_cycle(ns, all_servers, target, keep_ram_entries, hack_thread_count)
-    }
-    // update server list and target info
-    all_servers = await get_updated_server_list(ns)
-    target_server = all_servers.find(s => s.host === target)!
+    await hack_target(ns, minions, read_keep_ram_file(ns), target_host)
+    await update_target()
+    await prep()
+    await update_minions()
   }
 }
