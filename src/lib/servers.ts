@@ -7,21 +7,21 @@ export class MyServer {
   parent: string | null
 
   is_analyzed: boolean
-  max_ram: number | undefined
-  min_security: number | undefined
-  max_money: number | undefined
-  hack_needed: number | undefined
-  organization: string | undefined
-  growth_mult: number | undefined
-  ports_needed: number | undefined
-  cores: number | undefined
+  max_ram: number
+  min_security: number
+  max_money: number
+  hack_needed: number
+  organization: string
+  growth_mult: number
+  ports_needed: number
+  cores: number
 
   status_set: boolean
-  nuked: boolean | undefined
-  backdoor: boolean | undefined
-  ram_used: number | undefined
-  current_money: number | undefined
-  current_security: number | undefined
+  nuked: boolean
+  backdoor: boolean
+  ram_used: number
+  current_money: number
+  current_security: number
 
   /**
    * @param {string} host
@@ -34,8 +34,23 @@ export class MyServer {
     this.level = level
     this.path = path
     this.parent = parent
+
     this.is_analyzed = false
+    this.max_ram = 0
+    this.min_security = 0
+    this.max_money = 0
+    this.hack_needed = 0
+    this.organization = ""
+    this.growth_mult = 1
+    this.ports_needed = 0
+    this.cores = 0
+
     this.status_set = false
+    this.nuked = false
+    this.backdoor = false
+    this.ram_used = 0
+    this.current_money = 0
+    this.current_security = 0
   }
 
   /**
