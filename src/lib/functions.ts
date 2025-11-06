@@ -203,6 +203,10 @@ export function minus<T>(minuend: T[], subtrahend: T[]): T[] {
   return minuend.filter(e1 => !subtrahend.includes(e1))
 }
 
+export function same_array<T>(a1: T[], a2: T[]): boolean {
+  return a1.length === a2.length && a1.every(e1 => a2.includes(e1))
+}
+
 export function reduce_to_min(min: number, val: number): number {
   return (min > val) ? val : min
 }
