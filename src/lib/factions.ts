@@ -2,7 +2,7 @@ import { CompanyName, FactionName, FactionWorkType, NodeStats, NS, PlayerRequire
 import { get_skills_diff, has_skills } from '/lib/player'
 import { MyServer } from '/lib/servers'
 import { MyAugment } from '/lib/sing_augs'
-import { reduce_to_max } from '/lib/functions'
+import { f_unique, reduce_to_max, same_array } from '/lib/functions'
 
 const FACTION_FILE = "/data/faction_data.txt"
 
@@ -62,20 +62,78 @@ export function player_meets_faction_req(ns: NS, data: RequirementData, requirem
         case "hacknetRAM":
             return count_hacknet_prop(ns, s => s.ram) >= requirement.hacknetRAM
         case "bitNodeN":
+            return ns.getResetInfo().currentNode == requirement.bitNodeN
         case "bladeburnerRank":
+            try {
+                return ns.bladeburner.getRank() >= requirement.bladeburnerRank
+            } catch (e) {
+                return false
+            }
         case "jobTitle":
+            return Object.entries(ns.getPlayer().jobs).some(([company, job]) => job === requirement.jobTitle)
         case "numInfiltrations":
         default:
             return false
     }
 }
 
+function get_skill_short(skill: string) {
+    switch (skill) {
+        case "hacking": return "Hack"
+        case "strength": return "Str"
+        case "defense": return "Def"
+        case "dexterity": return "Dex"
+        case "agility": return "Agi"
+        case "charisma": return "Cha"
+        default: return skill
+    }
+}
+
+function group_skill_req_description(reqs: PlayerRequirement[], any_or_all: "any" | "all"): { skills: string | undefined, remaining_reqs: PlayerRequirement[] } {
+    const skill_reqs = reqs.filter(r => r.type === "skills")
+    const result: { skills: string | undefined, remaining_reqs: PlayerRequirement[] }
+        = { skills: undefined, remaining_reqs: reqs.filter(r => r.type !== "skills") }
+    if (skill_reqs.length > 0) {
+        const targets = skill_reqs.flatMap(r => Object.values(r.skills)).filter(f_unique)
+        const target_desc = targets.map(t => {
+            const skills_for_target = skill_reqs
+                .flatMap(r => Object.entries(r.skills))
+                .filter(([skill, value]) => value === t)
+                .map(([skill, value]) => skill)
+            if (skills_for_target.length === 6) return `${any_or_all === "any" ? "Ein Skill" : "Alle Skills"} >= ${t}`
+            if (same_array(skills_for_target, ["strength", "defense", "dexterity", "agility"])) return `${any_or_all === "any" ? "Kampf-Skill" : "Kampf-Skills"} >= ${t}`
+            const skills_desc = skills_for_target
+                .map(skill => get_skill_short(skill))
+                .join(any_or_all === "any" ? "|" : "+")
+            return `${skills_desc} >= ${t}`
+        })
+        result.skills = target_desc.join(", ")
+    }
+    return result
+}
+
 export function faction_req_to_string(ns: NS, requirement: PlayerRequirement): string {
     switch (requirement.type) {
         case "everyCondition":
-            return "(" + requirement.conditions.map(cond => faction_req_to_string(ns, cond)).join(" UND ") + ")"
+            {
+                const joiner = ' UND '
+                const skills_desc = group_skill_req_description(requirement.conditions, "all")
+                const descs: string[] = []
+                const part_count = (skills_desc.skills !== undefined ? 1 : 0) + skills_desc.remaining_reqs.length
+                if (skills_desc.skills !== undefined) descs.push(skills_desc.skills)
+                if (skills_desc.remaining_reqs.length > 0) descs.push(skills_desc.remaining_reqs.map(cond => faction_req_to_string(ns, cond)).join(joiner))
+                return part_count > 1 ? `(${descs.join(joiner)})` : descs.join(joiner)
+            }
         case "someCondition":
-            return "(" + requirement.conditions.map(cond => faction_req_to_string(ns, cond)).join(" ODER ") + ")"
+            {
+                const joiner = ' ODER '
+                const skills_desc = group_skill_req_description(requirement.conditions, "any")
+                const descs: string[] = []
+                const part_count = (skills_desc.skills !== undefined ? 1 : 0) + skills_desc.remaining_reqs.length
+                if (skills_desc.skills !== undefined) descs.push(skills_desc.skills)
+                if (skills_desc.remaining_reqs.length > 0) descs.push(skills_desc.remaining_reqs.map(cond => faction_req_to_string(ns, cond)).join(joiner))
+                return part_count > 1 ? `(${descs.join(joiner)})` : descs.join(joiner)
+            }
         case "not":
             return "NICHT " + faction_req_to_string(ns, requirement.condition)
         case "backdoorInstalled":
@@ -95,7 +153,7 @@ export function faction_req_to_string(ns: NS, requirement: PlayerRequirement): s
         case "numAugmentations":
             return ns.sprintf("Habe %d Augments", requirement.numAugmentations)
         case "skills":
-            return ns.sprintf("(Skills: %s)", Object.entries(requirement.skills).filter(([key, val]) => val !== undefined).map(([key, val]) => `${key}: ${val}`).join(", "))
+            return ns.sprintf("%s", Object.entries(requirement.skills).filter(([key, val]) => val !== undefined).map(([key, val], idx, ar) => `${ar.length > 1 && idx === 0 ? "(" : ""}${get_skill_short(key)} >= ${val}${ar.length > 1 && idx === ar.length - 1 ? ")" : ""}`).join(", "))
         case "sourceFile":
             return ns.sprintf("Habe SF %d", requirement.sourceFile)
         case "bitNodeN":
@@ -194,8 +252,15 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
             const ram_total = count_hacknet_prop(ns, s => s.ram)
             return ram_total >= requirement.hacknetRAM ? 0 : Math.log2(requirement.hacknetRAM - ram_total) * 0.1
         case "bitNodeN":
+            return ns.getResetInfo().currentNode == requirement.bitNodeN ? 0 : MAX_DIFFICULTY
         case "bladeburnerRank":
+            try {
+                return Math.max(0, requirement.bladeburnerRank - ns.bladeburner.getRank())
+            } catch (e) {
+                return MAX_DIFFICULTY
+            }
         case "jobTitle":
+            return Object.entries(ns.getPlayer().jobs).some(([company, job]) => job === requirement.jobTitle) ? 0 : 5
         case "numInfiltrations":
 
         default:
@@ -205,9 +270,9 @@ export function get_faction_req_difficulty(ns: NS, data: RequirementData, requir
 
 export function get_faction_difficulty(ns: NS, data: RequirementData, faction: MyFaction): number {
     // Faction is already available
-    if(faction.is_available) return 0
+    if (faction.is_available) return 0
     // Player already joined an enemy faction
-    if(faction.enemies.some(enemy => data.factions.find(f => f.name === enemy)!.joined_them)) return MAX_DIFFICULTY
+    if (faction.enemies.some(enemy => data.factions.find(f => f.name === enemy)!.joined_them)) return MAX_DIFFICULTY
     // Calculate difficulty by determining the maximum difficulty of all individual requirements.
     return faction.invite_requirements.map(r => get_faction_req_difficulty(ns, data, r)).reduce(reduce_to_max, 0)
 }
