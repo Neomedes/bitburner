@@ -133,9 +133,9 @@ export async function main(ns: NS) {
   async function update_minions() {
     if (test_for_new_minions) {
       all_servers = await get_updated_server_list(ns)
-      const possible_minions = all_servers.filter(s => s.max_ram > 0)
+      const possible_minions = all_servers.filter(s => s.max_ram > 0 && !s.is_purchased)
       minions = possible_minions.filter(s => s.nuked)
-      copy_scripts(ns, possible_minions)
+      copy_scripts(ns, minions)
       minions.sort((a, b) => a.max_ram - b.max_ram) // sort by max RAM ascending
       test_for_new_minions = (possible_minions.length > minions.length)
     }
