@@ -27,7 +27,7 @@ export async function main(ns: NS): Promise<void> {
         ns.tprintf("Aufruf: %s [OPTIONEN] UNI Kurs", ns.getScriptName())
         ns.tprintf(" ")
         ns.tprintf("Folgende Optionen stehen zur Verfügung:")
-        ns.tprintf("%-16s - %s", "-c [LEVEL]", "Nur bis zu einem Erreichen eines Hack-Levels von [LEVEL] studieren")
+        ns.tprintf("%-16s - %s", "-c [LEVEL]", "Nur bis zu einem Erreichen eines Charisma-Levels von [LEVEL] studieren")
         ns.tprintf("%-16s - %s", "-h [LEVEL]", "Nur bis zu einem Erreichen eines Hack-Levels von [LEVEL] studieren")
         ns.tprintf("%-16s - %s", "-s [SEC]", "Nur [SEC] Sekunden studieren")
         ns.tprintf("%-16s - %s", "--help / -?", "Diese Hilfe ausgeben")

@@ -38,7 +38,17 @@ alias -g list="run scripts/botnet.js"
 
 ## TODO
 
-1. Use Player.jobs to reduce risk of errors in `sing_job.js`
+1. Use Player.jobs to reduce risk of errors in `sing_job.ts`
+1. Build a script that uses `sing_job.ts` to work for multiple companies in succession.
+1. Split `sing_faction.ts` into 2 scripts:
+   - One that works for a single faction until a given threshold
+   - A second script that uses the first to work for multiple factions in succession.
+1. Use `sing_study.ts` for `sing_job.ts` to study for charisma
+1. Implement auto hacking
+1. Enhance autostart
+   - Skip things that are not needed anymore when autostarting after a BitBurner restart
+
+## Main helpers
 
 ### PAL - Purchase Augmentations List
 
@@ -79,8 +89,12 @@ These are:
    1. When home gets better (CPU x RAM > Botnet RAM), switch to fill home with one script instead of using the botnet
    1. Additionally: When enough hacking skill is acquired, open backdoors on all servers
 1. Determine which factions to join and what to do to get an invitation
-   1. Travel around the world
-   1. Work for companies
+   - Build a script that does all necessary steps to join a faction
+   - Always join "cheap" factions first (primarily non-companies, maybe improve difficulty calculation for factions)
+   - Start by improving hacking factors
+   - Then improve company reputation factors
+   - Then improve faction reputation factors
+   - Then improve charisma factors
 1. Determine how much reputation is needed for the best augments of this faction and how to get there
    1. Work for the faction (in the best job available)
    1. Eyeball whether it is faster to
