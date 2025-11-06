@@ -192,7 +192,7 @@ export async function main(ns: NS): Promise<void> {
             target_value: target_skills.charisma,
             get_current_value: () => ns.getPlayer().skills.charisma,
             on_start: () => {
-                if (OPTS.ladder === true) ns.tprintf("Lerne Management zum Erreichen von %d Charisma", target_skills.charisma)
+                if (OPTS.ladder === true) ns.tprintf("Lerne Leadership zum Erreichen von %d Charisma", target_skills.charisma)
                 if (ns.getPlayer().city !== ns.enums.CityName.Sector12) {
                     const travelled = ns.singularity.travelToCity(ns.enums.CityName.Sector12)
                     if (!travelled) {
@@ -200,9 +200,9 @@ export async function main(ns: NS): Promise<void> {
                         return false
                     }
                 }
-                const studying = ns.singularity.universityCourse("Rothman University", ns.enums.UniversityClassType.management)
+                const studying = ns.singularity.universityCourse("Rothman University", ns.enums.UniversityClassType.leadership, must_focus)
                 if (!studying) {
-                    error_t(ns, "Abbruch: Konnte kein Management an der Rothman studieren.")
+                    error_t(ns, "Abbruch: Konnte kein Leadership an der Rothman studieren.")
                     return false
                 }
                 return true
