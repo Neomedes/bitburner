@@ -10,10 +10,10 @@ export async function update_server_list(ns: NS) {
   disableLogs(ns, "exec")
   await exec_script(ns, "ds/servers_find.js", "home")
   await exec_script(ns, "ds/servers_analyze.js", "home")
+  await exec_script(ns, "ds/servers_pserv.js", "home")
 }
 
 export async function get_updated_server_list(ns: NS): Promise<MyServer[]> {
-  disableLogs(ns, "exec")
   await update_server_list(ns)
   return read_server_file(ns)
 }

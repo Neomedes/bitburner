@@ -5,6 +5,7 @@ export class MyServer {
   level: number
   path: string[]
   parent: string | null
+  is_purchased: boolean
 
   is_analyzed: boolean
   max_ram: number
@@ -34,6 +35,7 @@ export class MyServer {
     this.level = level
     this.path = path
     this.parent = parent
+    this.is_purchased = false
 
     this.is_analyzed = false
     this.max_ram = 0
@@ -95,6 +97,11 @@ export class MyServer {
     return this
   }
 
+  set_is_purchased(value: boolean): MyServer {
+    this.is_purchased = value
+    return this
+  }
+
   /**
    * @param {any} Object parsed from JSON
    * @return {MyServer} The parsed server.
@@ -112,8 +119,12 @@ export class MyServer {
         obj.ports_needed,
         obj.cores,
       )
-    } if (obj.status_set) {
+    }
+    if (obj.status_set) {
       s.set_status(obj.nuked, obj.backdoor, obj.ram_used, obj.current_money, obj.current_security)
+    }
+    if (obj.is_purchased) {
+      s.set_is_purchased(obj.is_purchased)
     }
     return s
   }
