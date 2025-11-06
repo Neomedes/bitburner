@@ -1,10 +1,10 @@
 import { ScriptArg } from "@ns"
-import { exec_script, is_empty_str } from "lib/functions"
+import { exec_script, is_empty_str, reduce_to_max, reduce_to_sum } from "lib/functions"
 import { get_keep_ram, read_keep_ram_file } from "lib/keep_ram"
 import { error_t, info_t, success_t, warning_t } from "lib/log"
 import { MyServer } from "lib/servers"
 import { get_updated_server_list } from "util/update_data"
-import { OutputTable, OutputTableColumnType } from "/lib/tables"
+import { OutputTable, OutputTableColumnTotalCalculationMethod, OutputTableColumnType } from "/lib/tables"
 
 /**
  * Retrieves all servers with a matching hostname.
@@ -163,15 +163,15 @@ function print_server_stats(ns: NS, servers: MyServer[], show_all: boolean, spec
   const ot = new OutputTable(ns,
     [
       { title: "Name", property: "host", width: 20, type: OutputTableColumnType.String },
-      { title: "Hack", property: "hack_needed", width: 5, type: OutputTableColumnType.Integer },
-      { title: "max $", property: "max_money", width: 10, type: OutputTableColumnType.Currency },
-      { title: "min Sec", property: "min_security", width: 10, type: OutputTableColumnType.Integer },
-      { title: "RAM", property: "max_ram", width: 10, type: OutputTableColumnType.Ram },
-      { title: "Offen", property: "nuked", width: 10, type: OutputTableColumnType.Boolean },
-      { title: "Backdoor", property: "backdoor", width: 10, type: OutputTableColumnType.Boolean },
+      { title: "Hack", property: "hack_needed", width: 5, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
+      { title: "max $", property: "max_money", width: 10, type: OutputTableColumnType.Currency, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
+      { title: "min Sec", property: "min_security", width: 10, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
+      { title: "RAM", property: "max_ram", width: 10, type: OutputTableColumnType.Ram, total_calculation: OutputTableColumnTotalCalculationMethod.NumberSum },
+      { title: "Offen", property: "nuked", width: 10, type: OutputTableColumnType.Boolean, total_calculation: OutputTableColumnTotalCalculationMethod.BooleanCountTrue },
+      { title: "Backdoor", property: "backdoor", width: 10, type: OutputTableColumnType.Boolean, total_calculation: OutputTableColumnTotalCalculationMethod.BooleanCountTrue },
       { title: "Score", property: "score", width: 10, type: OutputTableColumnType.Percentage },
     ],
-    { outer_lines: true },
+    { outer_lines: true, lines_per_block: 5, print_totals: show_all, repeat_header: 20 },
   )
 
   const player_hack_level = ns.getHackingLevel()

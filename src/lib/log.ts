@@ -4,8 +4,18 @@ Constants and functions to format and print messages
 
 import { ScriptArg } from "@ns";
 
+export type Color = string
+
+export function toColor(r: number, g: number, b: number): Color {
+    return `\u001b[38;2;${r};${g};${b}m`
+}
+
+export function toBgColor(r: number, g: number, b: number): Color {
+    return `\u001b[48;2;${r};${g};${b}m`
+}
+
 /** Color codes used for formatting terminal messages. */
-export enum Color {
+export enum StandardColors {
     black = '\u001b[30m',
     red = '\u001b[31m',
     green = '\u001b[32m',
@@ -22,7 +32,6 @@ export enum Color {
     brightMagenta = '\u001b[35;1m',
     brightCyan = '\u001b[36;1m',
     brightWhite = '\u001b[37;1m',
-    brightPurple = '\u001b[38;2;128;128;255m',
     default = '\u001b[0m',
 };
 
@@ -65,7 +74,7 @@ export function colored_t(ns: NS, color: Color, msg: string, ...msg_args: Script
  * Formats a message as an error in red.
  */
 export function error_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return colored_msg(ns, Color.red, msg, ...msg_args)
+    return colored_msg(ns, StandardColors.red, msg, ...msg_args)
 }
 
 /**
@@ -86,7 +95,7 @@ export function error_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
  * Formats a message as a warning in yellow.
  */
 export function warning_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return colored_msg(ns, Color.yellow, msg, ...msg_args)
+    return colored_msg(ns, StandardColors.yellow, msg, ...msg_args)
 }
 
 /**
@@ -107,7 +116,7 @@ export function warning_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
  * Formats a message as a success in green (slightly brighter than the terminal color).
  */
 export function success_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return colored_msg(ns, Color.brightGreen, msg, ...msg_args)
+    return colored_msg(ns, StandardColors.brightGreen, msg, ...msg_args)
 }
 
 /**
@@ -128,7 +137,7 @@ export function success_t(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
  * Formats a message as a info in blue (slightly brighter than the terminal color).
  */
 export function info_msg(ns: NS, msg: string, ...msg_args: ScriptArg[]) {
-    return colored_msg(ns, Color.brightCyan, msg, ...msg_args)
+    return colored_msg(ns, StandardColors.brightCyan, msg, ...msg_args)
 }
 
 /**

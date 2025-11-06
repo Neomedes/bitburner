@@ -1,8 +1,8 @@
 import { NS } from '@ns'
-import { property } from 'lodash'
 import { assert, reduce_to_max } from '/lib/functions'
+import { StandardColors, toBgColor } from '/lib/log'
 
-const EMPTY_TITLE: string = ""
+export const EMPTY_TITLE = ""
 
 export type boolean_translations = [string, string, string?]
 
@@ -34,6 +34,18 @@ export enum OutputTableColumnType {
     Boolean = "bool",
 }
 
+export enum OutputTableColumnTotalCalculationMethod {
+    NoCalculation = "-",
+    NumberSum = "sum",
+    NumberMin = "min",
+    NumberMax = "max",
+    NumberAvg = "avg",
+    BooleanCountTrue = "count_true",
+    BooleanCountFalse = "count_false",
+}
+
+type OutputTableTotals = ([string, number | number[] | null | ""])[]
+
 
 /**
  * @param type Type of value.
@@ -45,17 +57,17 @@ export enum OutputTableColumnType {
 function column_value_to_string(type: OutputTableColumnType, ns: NS, value: any, boolean_translations: boolean_translations): string {
     switch (type) {
         case OutputTableColumnType.Number:
-            return number_to_string(ns, value)
+            return typeof (value) === "number" ? number_to_string(ns, value) : String(value)
         case OutputTableColumnType.Percentage:
-            return percentage_to_string(ns, value)
+            return typeof (value) === "number" ? percentage_to_string(ns, value) : String(value)
         case OutputTableColumnType.Ram:
-            return ram_to_string(ns, value)
+            return typeof (value) === "number" ? ram_to_string(ns, value) : String(value)
         case OutputTableColumnType.Integer:
-            return integer_to_string(ns, value)
+            return typeof (value) === "number" ? integer_to_string(ns, value) : String(value)
         case OutputTableColumnType.Currency:
-            return currency_to_string(ns, value)
+            return typeof (value) === "number" ? currency_to_string(ns, value) : String(value)
         case OutputTableColumnType.Boolean:
-            return boolean_to_string(ns, value, boolean_translations)
+            return typeof (value) === "boolean" ? boolean_to_string(ns, value, boolean_translations) : String(value)
         default:
             return String(value)
     }
@@ -76,16 +88,68 @@ export interface OutputTableColumnConfig {
     /** Should the column width be automatically determined */
     auto_width: boolean,
     /** Individual boolean translations */
-    boolean_translations: boolean_translations
+    boolean_translations: boolean_translations,
+    /** Method, how to calculate the total, if needed */
+    total_calculation: OutputTableColumnTotalCalculationMethod,
 }
 
 function get_values(ns: NS, config: OutputTableColumnConfig[], value: any): string[] {
     const entries = Object.entries(value)
     const values = config.map(cfg => {
-        const entry = (entries.find(e => cfg.property === e[0])?.[1]) ?? ""
+        const entry: any = (entries.find(e => cfg.property === e[0])?.[1]) ?? ""
         return typeof (entry) === "string" ? entry : column_value_to_string(cfg.type, ns, entry, cfg.boolean_translations)
     })
     return values
+}
+
+const counting_totals = [
+    OutputTableColumnTotalCalculationMethod.BooleanCountFalse,
+    OutputTableColumnTotalCalculationMethod.BooleanCountTrue,
+    OutputTableColumnTotalCalculationMethod.NumberSum,
+]
+const numeric_totals = [
+    OutputTableColumnTotalCalculationMethod.NumberMax,
+    OutputTableColumnTotalCalculationMethod.NumberMin,
+]
+const rolling_totals = [
+    OutputTableColumnTotalCalculationMethod.NumberAvg
+]
+function init_totals(config: OutputTableColumnConfig[]): OutputTableTotals {
+    return config.map(cfg => {
+        if (numeric_totals.includes(cfg.total_calculation)) return [cfg.property, null]
+        if (counting_totals.includes(cfg.total_calculation)) return [cfg.property, 0]
+        if (rolling_totals.includes(cfg.total_calculation)) return [cfg.property, []]
+        return [cfg.property, ""]
+    })
+}
+function add_to_totals(config: OutputTableColumnConfig[], value: any, totals: OutputTableTotals) {
+    const entries = Object.entries(value)
+    config.forEach((cfg, idx) => {
+        const entry: any = (entries.find(e => cfg.property === e[0])?.[1]) ?? ""
+        switch (cfg.total_calculation) {
+            case OutputTableColumnTotalCalculationMethod.NumberSum:
+                if (typeof entry === "number") totals[idx][1] = (totals[idx][1] as number) + entry
+                break;
+            case OutputTableColumnTotalCalculationMethod.NumberMin:
+                if (typeof entry === "number") totals[idx][1] = totals[idx][1] === null ? entry : Math.min(entry, totals[idx][1] as number)
+                break;
+            case OutputTableColumnTotalCalculationMethod.NumberMax:
+                if (typeof entry === "number") totals[idx][1] = totals[idx][1] === null ? entry : Math.max(entry, totals[idx][1] as number)
+                break;
+            case OutputTableColumnTotalCalculationMethod.NumberAvg:
+                if (typeof entry === "number") (totals[idx][1] as number[]).push(entry)
+                break;
+            case OutputTableColumnTotalCalculationMethod.BooleanCountTrue:
+                if (typeof entry === "boolean") totals[idx][1] = (totals[idx][1] as number) + (entry ? 1 : 0)
+                break;
+            case OutputTableColumnTotalCalculationMethod.BooleanCountFalse:
+                if (typeof entry === "number") totals[idx][1] = (totals[idx][1] as number) + (entry ? 0 : 1)
+                break;
+            case OutputTableColumnTotalCalculationMethod.NoCalculation:
+            default:
+                break;
+        }
+    })
 }
 
 /** Configuration for the whole table */
@@ -96,12 +160,17 @@ interface OutputTableConfig {
     outer_lines: boolean,
     /** How to translate boolean values. First for true, second for false. Defaults are the German "Ja" and "Nein". */
     boolean_translations: boolean_translations,
+    /** Repeat the header every X lines, if number is > 0. Default is 0 (i.e. no intermediate headlines) */
+    repeat_header: number,
+    /** Print a line at the bottom containing the columns totals. Default is false. */
+    print_totals: boolean,
 }
 
 interface OutputLine {
     content: string[],
     counts: boolean,
     is_title: boolean,
+    is_separator: boolean,
 }
 
 function fill_partial_config(column: Partial<OutputTableColumnConfig>, index: number, default_boolean_translations: boolean_translations): OutputTableColumnConfig {
@@ -114,7 +183,8 @@ function fill_partial_config(column: Partial<OutputTableColumnConfig>, index: nu
         type: column.type ?? OutputTableColumnType.String,
         left_aligned: (column.left_aligned ?? false) === !is_auto_width,
         auto_width: column.auto_width ?? is_auto_width,
-        boolean_translations: column.boolean_translations ?? default_boolean_translations
+        boolean_translations: column.boolean_translations ?? default_boolean_translations,
+        total_calculation: column.total_calculation ?? OutputTableColumnTotalCalculationMethod.NoCalculation
     }
 }
 
@@ -152,6 +222,14 @@ export class OutputTable<T> {
      */
     line: (value: Partial<T>, counts?: boolean) => void
     /**
+     * Adds a separator line.
+    */
+    separator: () => void
+    /**
+     * Prints all totals so far
+     */
+    totals: () => void
+    /**
      * Flushes the content registered so far.
      */
     flush: () => void
@@ -169,25 +247,93 @@ export class OutputTable<T> {
             lines_per_block: table_config?.lines_per_block ?? 3,
             outer_lines: table_config?.outer_lines ?? false,
             boolean_translations: table_config?.boolean_translations ?? ["Ja", "Nein"],
+            repeat_header: table_config?.repeat_header ?? 0,
+            print_totals: table_config?.print_totals ?? false,
         }
         const lines: OutputLine[] = []
 
+        /** Adds a line and returns the index of this last line */
+        function push_line(line: Partial<OutputLine>) {
+            return lines.push({
+                content: line.content ?? [],
+                counts: line.counts ?? false,
+                is_title: line.is_title ?? false,
+                is_separator: line.is_separator ?? false
+            }) - 1
+        }
+
         const config = to_column_config(columns, _table_config.boolean_translations)
         validate_config(config)
+        const automatic_header = config.some(cfg => cfg.title !== EMPTY_TITLE)
 
+        let line_in_block_counter = 0
+        this.separator = () => {
+            const empty_content = config.map(cfg => EMPTY_TITLE)
+            push_line({ content: empty_content, is_separator: true })
+            line_in_block_counter = 0
+        }
+
+        let lines_since_last_headline = 0
+        let last_saved_titles: string[]
         this.headline = (...titles: string[]) => {
             assert(titles.length === config.length, `Headline: ${titles.length} titles given but ${config.length} columns registered.`)
-            lines.push({ content: titles, counts: false, is_title: true })
+            push_line({ content: titles, is_title: true })
+            last_saved_titles = titles
+            this.separator()
+            lines_since_last_headline = 0
         }
+
+        const totals = init_totals(config)
+        this.totals = () => {
+            if (lines.length > 0 && !lines[lines.length - 1].is_separator) this.separator()
+            const totals_obj = Object.fromEntries(totals)
+            const values = get_values(ns, config, totals_obj)
+            push_line({ content: values })
+        }
+
         this.line = (value: Partial<T>, counts: boolean = true) => {
+            // Add an automatic headline if possible
+            if (last_saved_titles === undefined && automatic_header) this.headline(...config.map(cfg => cfg.title))
+            // Automatic intermediate headlines and separators, if this line counts
+            if (counts) {
+                // add a separator line before this one, if the last block is already full
+                if (_table_config.lines_per_block > 0 && line_in_block_counter >= _table_config.lines_per_block) {
+                    this.separator()
+                }
+                // Intermediate headline only after a separator and before a line that counts
+                if (_table_config.repeat_header > 0
+                    && last_saved_titles !== undefined
+                    && lines[lines.length - 1].is_separator
+                    && lines_since_last_headline >= _table_config.repeat_header) {
+                    this.headline(...last_saved_titles)
+                }
+            }
             const values = get_values(ns, config, value)
-            lines.push({ content: values, counts: counts, is_title: false })
+            push_line({ content: values, counts: counts })
+            add_to_totals(config, value, totals)
+            if (counts) {
+                lines_since_last_headline++
+                line_in_block_counter++
+            }
         }
 
         this.flush = () => {
+            // test if a last header should be printed
+            if (_table_config.repeat_header > 0 && last_saved_titles !== undefined && lines_since_last_headline > _table_config.repeat_header / 2) {
+                if (lines.length > 0 && !lines[lines.length - 1].is_separator) this.separator()
+                this.headline(...last_saved_titles)
+            }
+            // test if column totals should be printed
+            if (_table_config.print_totals) {
+                this.totals()
+            }
+            // test if non-auto-width-columns already exceed their width
+            let split_long_lines = config.filter(cfg => !cfg.auto_width).some(cfg => {
+                const index = config.indexOf(cfg)
+                const max_width = Math.max(lines.map(l => l.content[index].length).reduce(reduce_to_max), cfg.title.length)
+                return max_width > cfg.width
+            })
             // calculate automatic width column
-            let split_long_lines = false
-            const automatic_header = config.some(cfg => cfg.title !== EMPTY_TITLE)
             config.filter(cfg => cfg.auto_width).forEach(cfg => {
                 const index = config.indexOf(cfg)
                 const max_width = Math.max(lines.map(l => l.content[index].length).reduce(reduce_to_max), cfg.title.length)
@@ -204,36 +350,41 @@ export class OutputTable<T> {
                 const splitted_lines: string[][] = []
                 let remainder = [...line]
                 while (remainder.some(cv => cv.length > 0)) {
-                    splitted_lines.push(remainder.map(cv => cv.substring(0, 80)))
-                    remainder = remainder.map(cv => cv.substring(80))
+                    const splitted_line = remainder.map((cv, idx) => {
+                        const cfg = config.at(idx)!
+                        if (cv.length > cfg.width) {
+                            const split_at = cv.lastIndexOf(" ", cfg.width + 1)
+                            return split_at > (cfg.width / 2) ? [cv.substring(0, split_at), cv.substring(split_at + 1)] : [cv.substring(0, cfg.width), cv.substring(cfg.width)]
+                        }
+                        return [cv, ""]
+                    })
+                    splitted_lines.push(splitted_line.map(([cur, nxt]) => cur))
+                    remainder = splitted_line.map(([cur, nxt]) => nxt)
                 }
                 return splitted_lines
             }
-            function wrap_format(builder_fn: (config: OutputTableColumnConfig) => string, padding: string, line: string) {
-                const result = padding + config.map(builder_fn).join(padding + line + padding) + padding
+            function wrap_format(builder_fn: (config: OutputTableColumnConfig) => string, padding: string | [string, string], line: string) {
+                const padding_left = typeof (padding) === "string" ? padding : padding[0]
+                const padding_right = typeof (padding) === "string" ? padding : padding[1]
+                const result = padding_left + config.map(builder_fn).join(padding_right + line + padding_left) + padding_right
                 return _table_config.outer_lines ? line + result + line : result
             }
             // build line formats
-            const line_template = wrap_format(build_column_template, " ", "|")
-            const separator_line = wrap_format(build_separator_template, "-", "+")
+            const tpl_line = wrap_format(build_column_template, " ", "|")
+            const tpl_separator = wrap_format(build_separator_template, "-", "+")
+            const tpl_header = wrap_format(build_column_template, [` ${StandardColors.cyan}`, `${StandardColors.default} `], "|")
 
-            if (_table_config.outer_lines) ns.tprintf(separator_line)
+            if (_table_config.outer_lines) ns.tprintf(tpl_separator)
 
-            if (automatic_header) {
-                ns.tprintf(line_template, ...config.map(cfg => cfg.title))
-                ns.tprintf(separator_line)
-            }
-
-            let line_count_for_block = 0
-            lines.forEach(line => {
-                const block_ended_before = _table_config.lines_per_block > 0 && line_count_for_block > 0 && (line_count_for_block % _table_config.lines_per_block) === 0
-                if (block_ended_before && line.counts) ns.tprintf(separator_line)
-                wrap_oversize_lines(line.content).forEach(subline => ns.tprintf(line_template, ...subline))
-                if (line.is_title) ns.tprintf(separator_line)
-                if (line.counts) line_count_for_block++
+            lines.forEach((line, idx) => {
+                if (line.is_separator) {
+                    ns.tprintf(tpl_separator)
+                } else {
+                    wrap_oversize_lines(line.content).forEach(subline => ns.tprintf(line.is_title ? tpl_header : tpl_line, ...subline))
+                }
             })
 
-            if (_table_config.outer_lines) ns.tprintf(separator_line)
+            if (_table_config.outer_lines) ns.tprintf(tpl_separator)
         }
     }
 }
