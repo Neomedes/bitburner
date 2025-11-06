@@ -1,5 +1,5 @@
 import { formatTime, is_empty_str } from "lib/functions"
-import { Color, warning_t } from "lib/log"
+import { success_t, warning_t } from "lib/log"
 import { MyPurchasedServer, RamLevel } from "/lib/pserv"
 import { OutputTable, OutputTableColumnType } from "/lib/tables"
 import { get_updated_player, get_updated_pserv_list, update_server_list } from "/util/update_data"
@@ -270,7 +270,7 @@ async function max_out_server(ns: NS, batch_size: number, owned_servers: MyPurch
   // now finally actually upgrade them
   const successes = batch.map(os => os.upgrade(ns, target_level)).filter(res => res).length
   if (successes === batch.length) {
-    ns.tprintf("%sPSERV: %d Server auf Level %d (%s RAM)", Color.green, successes, target_level.lv, target_level.ram)
+    success_t(ns, "%d Server auf Level %d (%s RAM)", successes, target_level.lv, target_level.ram)
   }
 }
 
