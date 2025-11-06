@@ -1,5 +1,5 @@
 import { disableLogs } from "lib/functions"
-import { Color, colored_t, info_t, success_t, warning_t } from "lib/log"
+import { info_t, success_t } from "lib/log"
 import { get_updated_player } from "/util/update_data"
 
 const ALL_PROGRAMS = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe", "Formulas.exe"]
