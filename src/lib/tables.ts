@@ -238,14 +238,14 @@ export class OutputTable<T> {
      * Creates a new table definition for outputting to console
      * @param ns NetScript API.
      * @param columns Column definitions
-     * @param lines_per_block After how many lines should a separator be drawn. 0 or less means no separator lines. Default: 3.
-     * @param outer_lines Should outer lines be drawn? Default: False.
+     * @param lines_per_block After how many lines should a separator be drawn. 0 or less means no separator lines. Default: 5.
+     * @param outer_lines Should outer lines be drawn? Default: True.
      * @param boolean_translations Translations for boolean values. First for true, second for false. Default: ["Ja", "Nein"]
      */
     constructor(ns: NS, columns: Partial<OutputTableColumnConfig>[], table_config?: Partial<OutputTableConfig>) {
         const _table_config: OutputTableConfig = {
-            lines_per_block: table_config?.lines_per_block ?? 3,
-            outer_lines: table_config?.outer_lines ?? false,
+            lines_per_block: table_config?.lines_per_block ?? 5,
+            outer_lines: table_config?.outer_lines ?? true,
             boolean_translations: table_config?.boolean_translations ?? ["Ja", "Nein"],
             repeat_header: table_config?.repeat_header ?? 0,
             print_totals: table_config?.print_totals ?? false,
@@ -384,7 +384,7 @@ export class OutputTable<T> {
                 }
             })
 
-            if (_table_config.outer_lines) ns.tprintf(tpl_separator)
+            if (_table_config.outer_lines && !lines[lines.length - 1].is_separator) ns.tprintf(tpl_separator)
         }
     }
 }
