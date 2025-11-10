@@ -164,11 +164,14 @@ function print_server_stats(ns: NS, servers: MyServer[], show_all: boolean, spec
     [
       { title: "Name", property: "host", width: 20, type: OutputTableColumnType.String },
       { title: "Hack", property: "hack_needed", width: 5, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
-      { title: "max $", property: "max_money", width: 10, type: OutputTableColumnType.Currency, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
-      { title: "min Sec", property: "min_security", width: 10, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
+      { title: "Akt $", property: "current_money", width: 10, type: OutputTableColumnType.Currency, total_calculation: OutputTableColumnTotalCalculationMethod.NumberSum },
+      { title: "Max $", property: "max_money", width: 10, type: OutputTableColumnType.Currency, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
+      { title: "Security", property: "current_security", width: 10, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberAvg },
+      { title: "Min. Sec.", property: "min_security", width: 10, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
       { title: "RAM", property: "max_ram", width: 10, type: OutputTableColumnType.Ram, total_calculation: OutputTableColumnTotalCalculationMethod.NumberSum },
       { title: "Offen", property: "nuked", width: 10, type: OutputTableColumnType.Boolean, total_calculation: OutputTableColumnTotalCalculationMethod.BooleanCountTrue },
       { title: "Backdoor", property: "backdoor", width: 10, type: OutputTableColumnType.Boolean, total_calculation: OutputTableColumnTotalCalculationMethod.BooleanCountTrue },
+      { title: "Prepped", property: "prepped", width: 10, type: OutputTableColumnType.Boolean, total_calculation: OutputTableColumnTotalCalculationMethod.BooleanCountTrue },
       { title: "Score", property: "score", width: 10, type: OutputTableColumnType.Percentage },
     ],
     { outer_lines: true, lines_per_block: 5, print_totals: show_all, repeat_header: 20 },
@@ -190,6 +193,7 @@ function print_server_stats(ns: NS, servers: MyServer[], show_all: boolean, spec
     return {
       ...s,
       score: compute_score(s),
+      prepped: s.current_money >= s.max_money && s.current_security <= s.min_security
     }
   })
 
