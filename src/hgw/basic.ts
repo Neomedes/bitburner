@@ -75,8 +75,17 @@ function calculate_thread_distributions(ns: NS, minions: MyServer[], scripts: Sc
   return distributions.filter(dist => dist.threads.length > 0)
 }
 
-function prep_needed(target: MyServer): boolean {
-  return target.min_security < target.current_security || target.max_money > target.current_money
+function prep_needed(ns: NS, target: MyServer): boolean {
+  if (target.min_security < target.current_security) {
+    ns.printf("%s: Security muss noch geschwächt werden.", target.host)
+    return true
+  }
+  if (target.max_money > target.current_money) {
+    ns.printf("%s: Es muss noch Geld erzeugt werden.", target.host)
+    return true
+  }
+  ns.printf("Server %s ist geprepped.", target.host)
+  return false
 }
 
 async function run_distributions(ns: NS, distributions: ThreadDistribution[], target_host: string) {
@@ -149,7 +158,7 @@ export async function main(ns: NS) {
   await update_minions()
 
   async function prep() {
-    while (prep_needed(target)) {
+    while (prep_needed(ns, target)) {
       await prep_target(ns, minions, read_keep_ram_file(ns), target)
       await update_target()
     }
