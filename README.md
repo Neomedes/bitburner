@@ -39,6 +39,7 @@ alias -g list="run scripts/botnet.js"
 ## TODO
 
 1. Use Player.jobs to reduce risk of errors in `sing_job.ts`
+1. Improve faction and augment difficulty: Shadows of Anarchy has its own requirement progression system: Money 1m x7, Rep 10k x1.3
 1. Build a script that uses `sing_job.ts` to work for multiple companies in succession.
 1. Split `sing_faction.ts` into 2 scripts:
    - One that works for a single faction until a given threshold

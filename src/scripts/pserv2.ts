@@ -1,5 +1,5 @@
 import { formatTime, is_empty_str } from "lib/functions"
-import { success_t, warning_t } from "lib/log"
+import { error_t, success_t, warning_t } from "lib/log"
 import { MyPurchasedServer, RamLevel } from "/lib/pserv"
 import { OutputTable, OutputTableColumnType } from "/lib/tables"
 import { get_updated_player, get_updated_pserv_list, update_server_list } from "/util/update_data"
@@ -97,27 +97,6 @@ async function print_overview(ns: NS, available_servers: number, p_servers: MyPu
   }
 
   ot.flush()
-}
-
-/**
- * @param {NS} ns Netscript API.
- * @return {RamLevel[]}
- */
-function get_ram_levels(ns: NS): RamLevel[] {
-  const levels = [...Array(RamLevel.get_max_lv(ns) + 1).keys()] // [0..max]
-    .slice(1) // [1..max]
-    .map(RamLevel.by_level) // as server levels
-  return levels
-}
-
-/**
- * Purchase servers for real. No more security checks. Writes a protocol to the terminal and a toast.
- * @param {NS} ns Netscript API.
- * @return {MyPurchasedServer[]}
- */
-function get_owned_servers(ns: NS): MyPurchasedServer[] {
-  const servers = ns.getPurchasedServers().map(host => MyPurchasedServer.register(ns, host))
-  return servers
 }
 
 /**
@@ -274,6 +253,53 @@ async function max_out_server(ns: NS, batch_size: number, owned_servers: MyPurch
   }
 }
 
+async function upgrade_server(ns: NS, save_money: number): Promise<boolean> {
+  const ot = new OutputTable(ns, [
+    { property: "no", title: "Nr", type: OutputTableColumnType.Integer },
+    { property: "name", title: "Name", type: OutputTableColumnType.String },
+    { property: "level", title: "Level", type: OutputTableColumnType.Integer },
+    { property: "ram", title: "RAM", type: OutputTableColumnType.Ram },
+  ])
+  const servers = (await get_updated_pserv_list(ns)).filter(s => !s.current_level.is_max())
+  if (servers.length < 1) {
+    error_t(ns, "Es gibt keine Server, die ein Upgrade erfahren könnten. Kaufe erst einen neuen")
+  }
+  servers.sort((a, b) => a.host.localeCompare(b.host))
+  servers.forEach((s, i) => ot.line({ no: i + 1, name: s.host, level: s.current_level.lv, ram: s.current_level.ram }))
+
+  const choices = servers.map((s, i) => `${i + 1} - ${s.host} @${s.current_level.is_max() ? "MAX LV" : `LV ${s.current_level.lv}`}`)
+  choices.unshift("Abbrechen...")
+  const server_selection = (await ns.prompt("Welcher Server soll ein Upgrade erfahren?", { type: "select", choices: choices })) as string
+
+  if (server_selection == null || server_selection.indexOf(" - ") < 0) return false
+
+  const idx = parseInt(server_selection.substring(0, server_selection.indexOf(" - "))) - 1
+  const srv = servers[idx]
+  let level = srv.current_level
+  if (level.is_max()) {
+    ns.alert(ns.sprintf("Server %s ist bereits auf maximalem Level. Suche bitte einen anderen Server aus.", srv.host))
+    warning_t(ns, "Server %s ist bereits auf maximalem Level. Suche bitte einen anderen Server aus.", srv.host)
+    return true
+  }
+
+  const levels: RamLevel[] = []
+  while (!level.is_max()) {
+    level = level.next_level()
+    levels.push(level)
+  }
+  const level_selection = (await ns.prompt("Auf welches Level soll ?", { type: "select", choices: choices })) as string
+
+
+  return true
+}
+
+async function upgrade_servers(ns: NS, save_money: number): Promise<void> {
+  let again = true
+  while (again) {
+    again = await upgrade_server(ns, save_money)
+  }
+}
+
 export async function main(ns: NS) {
   /**
    * Prints the help and exits the script.
@@ -286,15 +312,14 @@ export async function main(ns: NS) {
     ns.tprintf(" ")
     ns.tprintf("Allgemein:")
     ns.tprintf(line, "-?/--help", "Zeigt diese Hilfe an und beendet das Skript.")
-    ns.tprintf(line, "-l", "Listet alle bereits gekauften Server auf.")
+    ns.tprintf(line, "-l/--list", "Listet alle bereits gekauften Server auf.")
     ns.tprintf(" ")
     ns.tprintf("Kauf:")
-    ns.tprintf(line, "-s/--save M", "Behält beim Kauf eine Rücklage i.H.v. $M ein.")
-    ns.tprintf(line, "-m", "Kauft/verbessert die Server bis zum Maximum. Dabei werden vorhandene Server")
+    ns.tprintf(line, "--save M", "Behält beim Kauf eine Rücklage i.H.v. $M ein.")
+    ns.tprintf(line, "-m", "Kauft/verbessert einen Server bis zum Maximum. Dabei werden vorhandene Server")
     ns.tprintf(line, "", "  erst komplett aufgerüstet, bevor ein neuer gekauft wird.")
     ns.tprintf(line, "--max ANZ", "wie -m, aber es wird dafür gesorgt, dass ANZ Server möglichst")
     ns.tprintf(line, "", "  gleichmäßig ausgerüstet sind.")
-    ns.tprintf(line, "-a/--auto", `Analog zu einem Aufruf von \`${ns.getScriptName()} -m\` alle ${formatTime(AUTOMATIC_BUY_INTERVAL)}`)
     ns.tprintf(line, "-b/--buy LV", "Kauft einen neuen Server mit Level LV")
     ns.exit()
   }
@@ -302,15 +327,14 @@ export async function main(ns: NS) {
   const OPTS = ns.flags([
     ['?', false], ['help', false], // help
     ['l', false], ['list', false], // show list of servers
-    ['s', 0], ['save', 0], // save amount of money
+    ['save', 0], // save amount of money
     ['m', false], ['max', 0], // max out an amount of servers
-    ['a', false], ['auto', false], // max out on servers
     ['b', 0], ['buy', 0], // buy a specific level of server
+    ['u', false], ['upgrade', false], // upgrade servers
   ])
-  OPTS.save = Math.max(OPTS.s as number, OPTS.save as number)
   OPTS.buy = Math.max(OPTS.b as number, OPTS.buy as number)
   OPTS.max = Math.max(OPTS.m === true ? 1 : 0, OPTS.max as number)
-  OPTS.auto = OPTS.auto === true || OPTS.a === true
+  OPTS.upgrade = OPTS.upgrade === true || OPTS.u === true
   OPTS.list = OPTS.list === true || OPTS.l === true
   OPTS.help = OPTS.help === true || OPTS["?"] === true
 
@@ -329,15 +353,14 @@ export async function main(ns: NS) {
   }
   if (OPTS.max > 0) {
     done_sth = true
-    await max_out_server(ns, OPTS.max, owned_servers, SERVER_LIMIT, OPTS.save)
+    await max_out_server(ns, OPTS.max, owned_servers, SERVER_LIMIT, OPTS.save as number)
   }
-  if (OPTS.list) {
+  if (OPTS.upgrade) {
     done_sth = true
-    const available_servers = SERVER_LIMIT - owned_servers.length
-    await print_overview(ns, available_servers, owned_servers, OPTS.save)
+    await upgrade_servers(ns, OPTS.save as number)
   }
-  if (!done_sth) {
-    // if nothing else should be done
-    print_help_and_exit()
+  if (!done_sth || OPTS.list) {
+    const available_servers = SERVER_LIMIT - owned_servers.length
+    await print_overview(ns, available_servers, owned_servers, OPTS.save as number)
   }
 }
