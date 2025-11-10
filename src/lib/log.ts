@@ -42,11 +42,19 @@ export function prepend_script(ns: NS, msg: string) {
     return ns.sprintf("%s: %s", ns.getScriptName(), msg)
 }
 
+const default_date_time_format: Intl.DateTimeFormatOptions = {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+}
+
 /**
  * Prepends the current time for easier recognition of when something happened.
  */
 export function prepend_time(ns: NS, msg: string) {
-    return ns.sprintf("%s: %s", new Date(Date.now()).toISOString(), msg)
+    return ns.sprintf("%s: %s", new Date(Date.now()).toLocaleString("de-DE", default_date_time_format), msg)
 }
 
 /**
