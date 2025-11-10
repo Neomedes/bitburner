@@ -166,7 +166,7 @@ function print_server_stats(ns: NS, servers: MyServer[], show_all: boolean, spec
       { title: "Hack", property: "hack_needed", width: 5, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
       { title: "Akt $", property: "current_money", width: 10, type: OutputTableColumnType.Currency, total_calculation: OutputTableColumnTotalCalculationMethod.NumberSum },
       { title: "Max $", property: "max_money", width: 10, type: OutputTableColumnType.Currency, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
-      { title: "Security", property: "current_security", width: 10, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberAvg },
+      { title: "Security", property: "current_security", width: 10, type: OutputTableColumnType.Number, total_calculation: OutputTableColumnTotalCalculationMethod.NumberAvg },
       { title: "Min. Sec.", property: "min_security", width: 10, type: OutputTableColumnType.Integer, total_calculation: OutputTableColumnTotalCalculationMethod.NumberMax },
       { title: "RAM", property: "max_ram", width: 10, type: OutputTableColumnType.Ram, total_calculation: OutputTableColumnTotalCalculationMethod.NumberSum },
       { title: "Offen", property: "nuked", width: 10, type: OutputTableColumnType.Boolean, total_calculation: OutputTableColumnTotalCalculationMethod.BooleanCountTrue },
