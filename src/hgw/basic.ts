@@ -1,7 +1,7 @@
 import { KeepRamEntry, read_keep_ram_file, get_keep_ram } from "lib/keep_ram"
 import { MyServer, read_server_file } from "lib/servers"
 import { disableLogs, finished, all_finished, is_empty_str, reduce_to_sum } from "lib/functions"
-import { error_t } from "lib/log"
+import { error_t, prepend_time } from "lib/log"
 import { get_updated_server_list } from "/util/update_data"
 
 interface ScriptInfo {
@@ -89,11 +89,17 @@ async function run_distributions(ns: NS, distributions: ThreadDistribution[], ta
 }
 
 async function prep_target(ns: NS, minions: MyServer[], keep_ram_data: KeepRamEntry[], target: MyServer) {
-  const scripts: ScriptInfo[] = []
-  if (target.min_security < target.current_security) scripts.push(SCRIPTS.WEAKEN)
-  if (target.max_money > target.current_money) scripts.push(SCRIPTS.GROW)
-  const thread_distributions = calculate_thread_distributions(ns, minions, scripts, keep_ram_data)
-  await run_distributions(ns, thread_distributions, target.host)
+  async function run_prep_action(actions: ScriptInfo[]) {
+    const dist = calculate_thread_distributions(ns, minions, actions, keep_ram_data)
+    actions.forEach(a => {
+      const threads_for_action = dist.flatMap(d => d.threads.filter(t => t.script_path === a.path).map(t => t.threads)).reduce(reduce_to_sum)
+      const msg = ns.sprintf("Starte Action %s auf %d threads im botnet.", a.name, threads_for_action)
+      ns.printf(prepend_time(ns, msg))
+    })
+    await run_distributions(ns, dist, target.host)
+  }
+  if (target.min_security < target.current_security) await run_prep_action([SCRIPTS.WEAKEN])
+  if (target.max_money > target.current_money) await run_prep_action([SCRIPTS.GROW, SCRIPTS.WEAKEN])
 }
 
 async function hack_target(ns: NS, minions: MyServer[], keep_ram_data: KeepRamEntry[], target_host: string) {
