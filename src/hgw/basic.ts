@@ -55,8 +55,9 @@ function calculate_thread_distributions(ns: NS, minions: MyServer[], scripts: Sc
   // Get max RAM needed per script by sorting scripts in descending order of RAM needed and use the first script's RAM.
   const max_ram_per_script_needed = scripts.toSorted((a, b) => b.ram - a.ram)[0].ram
   // Calculate how many threads per script can be maintained on the total RAM
-  const total_threads_available = distributions.map(dist => Math.floor(dist.ram_left / max_ram_per_script_needed)).reduce(reduce_to_sum)
-  const total_parts_per_batch = scripts.map(s => s.parts).reduce(reduce_to_sum)
+  const total_threads_available = distributions.map(dist => Math.floor(dist.ram_left / max_ram_per_script_needed)).reduce(reduce_to_sum, 0)
+  const total_parts_per_batch = scripts.map(s => s.parts).reduce(reduce_to_sum, 0)
+  if (total_parts_per_batch <= 0) return []
   const total_batches = Math.floor(total_threads_available / total_parts_per_batch)
   // for every script: fill all servers with the required amount of threads for this script
   scripts.forEach(scr => {
@@ -101,7 +102,7 @@ async function prep_target(ns: NS, minions: MyServer[], keep_ram_data: KeepRamEn
   async function run_prep_action(actions: ScriptInfo[]) {
     const dist = calculate_thread_distributions(ns, minions, actions, keep_ram_data)
     actions.forEach(a => {
-      const threads_for_action = dist.flatMap(d => d.threads.filter(t => t.script_path === a.path).map(t => t.threads)).reduce(reduce_to_sum)
+      const threads_for_action = dist.flatMap(d => d.threads.filter(t => t.script_path === a.path).map(t => t.threads)).reduce(reduce_to_sum, 0)
       const msg = ns.sprintf("Starte Action %s auf %d threads im botnet.", a.name, threads_for_action)
       ns.printf(prepend_time(ns, msg))
     })
